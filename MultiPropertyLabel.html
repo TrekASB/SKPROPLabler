@@ -193,6 +193,11 @@
   // Zoom-ut terskel for å korte ned tekst
   const COMPACT_DISTANCE_M = 120;
 
+  // ✅ Plassering/luft (mm) – juster her hvis ønskelig
+  const LABEL_EXTRA_GAP_MM = 180;    // luft fra topp av objekt før linja starter
+  const LABEL_LIFT_MM = 650;         // hvor høyt over objektet teksten "løftes"
+  const LABEL_LINE_LEN_MM = 1200;    // lengde på lederlinje
+
   const els = {
     status: document.getElementById("status"),
     error: document.getElementById("error"),
@@ -361,7 +366,7 @@
     return undefined;
   }
 
-  // ✅ NY: Bygger kun verdier (uten Pset-navn og uten property-navn)
+  // ✅ Kun verdier (ingen Pset-navn / property-navn)
   function buildFullText(config, objProps){
     const lines = [];
     for (const block of config){
@@ -377,7 +382,7 @@
     return lines.join("\n");
   }
 
-  // ✅ NY: Kompakt = første verdi per Pset-blokk (uten navn)
+  // ✅ Kompakt: første verdi per Pset-blokk (ingen navn)
   function buildCompactText(config, objProps){
     const lines = [];
     for (const block of config){
@@ -436,14 +441,21 @@
     }
   }
 
+  // ✅ Større spredning (anti-overlapp)
   function staggerOffsetMm(index){
-    const step = 140; // mm
-    const side = 120; // mm
+    const stepY = 220; // mm (større enn før)
+    const stepX = 220; // mm (større enn før)
     const row = index % 6;
     const col = Math.floor(index / 6) % 2;
-    return { dy: row * step, dx: (col === 0 ? -side : side) * (row % 2 ? 1 : -1), dz: 0 };
+
+    return {
+      dy: row * stepY,
+      dx: (col === 0 ? -stepX : stepX) * (row % 2 ? 1 : -1),
+      dz: 0
+    };
   }
 
+  // ✅ Plasserer teksten høyere og med lengre lederlinje (mindre "tett på objektet")
   async function addTextMarkupOverObject(modelId, runtimeId, text, indexForStagger){
     if (!API?.markup?.addTextMarkup) throw new Error("MarkupAPI ikke tilgjengelig (addTextMarkup).");
 
@@ -461,13 +473,14 @@
 
     const start = {
       positionX: cx_mm + st.dx,
-      positionY: topY_mm + 80 + st.dy,
+      positionY: topY_mm + LABEL_EXTRA_GAP_MM + st.dy,
       positionZ: cz_mm + st.dz,
       modelId, objectId: runtimeId
     };
+
     const end = {
       positionX: cx_mm + st.dx,
-      positionY: topY_mm + 520 + st.dy,
+      positionY: topY_mm + LABEL_LIFT_MM + LABEL_LINE_LEN_MM + st.dy,
       positionZ: cz_mm + st.dz,
       modelId, objectId: runtimeId
     };
