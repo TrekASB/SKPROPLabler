@@ -98,7 +98,7 @@
       <div class="row" style="gap:8px;align-items:center;">
         <span class="pill">Filtrer bort: <b>IFCPROJECT</b> / <b>IFCSITE</b> / <b>IFCBUILDING</b> / <b>IFCBUILDINGSTOREY</b></span>
         <span class="pill">Klikk i 3D = <b>toggle</b> inn/ut av liste</span>
-        <span class="pill">Påskrift = <b>ingen kryssing</b> (vertikale leaderlines)</span>
+        <span class="pill">Leaderline: <b>topp-senter → ut til høyre</b></span>
       </div>
 
       <div class="row" style="gap:8px;align-items:center;">
@@ -155,7 +155,7 @@
 
     <div class="muted hint">
       Tips: Slå på <b>Markups/Annotations</b> i viewer for å se tekst.<br>
-      NB: Markup API lar oss ikke styre font/size direkte, så vi løser lesbarhet via spacing.
+      NB: Markup API lar oss ikke styre font/size direkte, så vi løser lesbarhet via plassering/spredning.
     </div>
   </div>
 
@@ -202,16 +202,16 @@
   let camDebounce = null;
 
   const COMPACT_DISTANCE_M = 120;
-
   let markupsEnabled = true;
 
-  // === NO-CROSS PARAMS ===
-  const NO_CROSS_STEP_Y_MM = 420;
-  const LABEL_BASE_GAP_MM = 180;
-  const LABEL_TOP_LIFT_MM = 1400;
-  const LABEL_LINE_LEN_MM = 1600;
+  // ===== NY PLASSERING (slik som blå pil i bildet) =====
+  // Start på topp-senter, end litt opp + til høyre (tekst utenfor objektet)
+  const START_GAP_Y_MM = 35;         // hvor langt over toppflaten ankret starter
+  const TEXT_OFFSET_X_MM = 900;      // hvor langt ut til siden teksten skal stå (+ høyre, - venstre)
+  const TEXT_OFFSET_Y_MM = 260;      // hvor langt opp fra toppflaten teksten står
+  const STACK_STEP_Y_MM = 220;       // ekstra "stabling" pr label for å unngå kryss/rot
+  // =====================================================
 
-  // === COLOR SUPPORT ===
   const COLOR_MAP = {
     blue:   { r: 0,   g: 0,   b: 204, a: 255 },
     red:    { r: 220, g: 0,   b: 0,   a: 255 },
@@ -219,9 +219,7 @@
     yellow: { r: 245, g: 180, b: 0,   a: 255 }
   };
   let selectedColorKey = "blue";
-  function currentMarkupColor(){
-    return COLOR_MAP[selectedColorKey] || COLOR_MAP.blue;
-  }
+  function currentMarkupColor(){ return COLOR_MAP[selectedColorKey] || COLOR_MAP.blue; }
 
   const els = {
     status: document.getElementById("status"),
@@ -256,7 +254,6 @@
 
   function setStatus(msg){ els.status.textContent = msg; }
   function setError(msg){ els.error.textContent = msg || ""; }
-
   function norm(v){ return (v===null || v===undefined) ? "" : String(v).trim(); }
 
   function escHtml(s){
@@ -478,11 +475,13 @@
     }
   }
 
-  function staggerOffsetMm(index){
-    return { dx: 0, dy: index * NO_CROSS_STEP_Y_MM, dz: 0 };
+  // Stabling for ryddig (samme retning, ingen kryss)
+  function stackOffsetMm(index){
+    return { dy: index * STACK_STEP_Y_MM };
   }
 
-  async function addTextMarkupOverObject(modelId, runtimeId, text, indexForStagger){
+  // ✅ Ny plassering: topp-senter -> tekst utenfor (høyre) nær topp
+  async function addTextMarkupOverObject(modelId, runtimeId, text, indexForStack){
     if (!API?.markup?.addTextMarkup) throw new Error("MarkupAPI ikke tilgjengelig (addTextMarkup).");
 
     const boxes = await API.viewer.getObjectBoundingBoxes(modelId, [runtimeId]);
@@ -495,19 +494,21 @@
     const cz_mm = ((min.z + max.z) / 2) * 1000;
     const topY_mm = (max.y) * 1000;
 
-    const st = staggerOffsetMm(indexForStagger || 0);
+    const st = stackOffsetMm(indexForStack || 0);
     const color = currentMarkupColor();
 
+    // Start: tett på topp-senter (anker)
     const start = {
       positionX: cx_mm,
-      positionY: topY_mm + LABEL_BASE_GAP_MM + st.dy,
+      positionY: topY_mm + START_GAP_Y_MM,
       positionZ: cz_mm,
       modelId, objectId: runtimeId
     };
 
+    // End: litt opp + til siden (tekst utenfor objektet)
     const end = {
-      positionX: cx_mm,
-      positionY: topY_mm + LABEL_TOP_LIFT_MM + LABEL_LINE_LEN_MM + st.dy,
+      positionX: cx_mm + TEXT_OFFSET_X_MM,
+      positionY: topY_mm + TEXT_OFFSET_Y_MM + st.dy,
       positionZ: cz_mm,
       modelId, objectId: runtimeId
     };
@@ -571,6 +572,7 @@
       await clearMarkups();
       if (myRun !== refreshRunId) return;
 
+      // Stabil rekkefølge gir stabil stacking
       const items = Array.from(picked.values()).slice().sort((a,b) => {
         const am = String(a.modelId), bm = String(b.modelId);
         if (am !== bm) return am.localeCompare(bm);
@@ -860,7 +862,6 @@
       els.markBtn.disabled = false;
       els.colorSel.disabled = false;
 
-      // default
       selectedColorKey = els.colorSel.value || "blue";
       updateMarkupButton();
 
@@ -883,7 +884,6 @@
   els.csvBtn.addEventListener("click", exportCSV);
   els.resetListBtn.addEventListener("click", resetPickedList);
 
-  // Toggle påskrift
   els.markBtn.addEventListener("click", async () => {
     markupsEnabled = !markupsEnabled;
     updateMarkupButton();
@@ -897,7 +897,6 @@
     }
   });
 
-  // ✅ Fargevalg: rebuild for å oppdatere fargen på eksisterende markups
   els.colorSel.addEventListener("change", async () => {
     selectedColorKey = els.colorSel.value || "blue";
     if (markupsEnabled){
