@@ -1,7 +1,8 @@
 {
   "title": "PropertyLabler",
-  "icon": "https://trekasb.github.io/SKPROP/MultiPropertyLabel.png",
-  "url": "https://trekasb.github.io/SKPROP/MultiPropertyLabel.html",
+  "icon": "https://trekasb.github.io/SKPROPLabler/MultiPropertyLabel.png",
+  "url": "https://trekasb.github.io/SKPROPLabler/MultiPropertyLabel.html",
   "description": "Viser valgte egenskapsdata i 3d vinduet.",
   "enabled": true
 }
+
