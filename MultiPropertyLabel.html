@@ -53,9 +53,9 @@
     select:disabled{background:#f3f4f6;color:#9ca3af;}
     button{border:none;color:#fff;font-weight:900;cursor:pointer;}
     #scanBtn{background:var(--success);}
-    #clearBtn{background:var(--danger);}
     #csvBtn{background:var(--primary);}
     #resetListBtn{background:var(--warn); color:#111827;}
+    #markBtn{background:var(--danger);}
     button:disabled{opacity:.6;cursor:not-allowed;}
 
     table{width:100%;border-collapse:collapse;font-size:12px;}
@@ -84,7 +84,7 @@
     <div class="title">MultiPropertyLabel</div>
     <div class="org">Norconsult Norge</div>
     <div class="dev">Developed by Edin Dzakmic, Norconsult, (AI-assisted development)</div>
-    <div class="sub">Velg Pset + properties → klikk objekter i 3D (multi) → påskrift + liste + CSV</div>
+    <div class="sub">Velg Pset + properties → klikk objekter i 3D → påskrift + liste + CSV</div>
   </div>
 
   <div class="status" id="status">Kobler til Trimble Connect…</div>
@@ -96,14 +96,14 @@
       <div class="row" style="gap:8px;align-items:center;">
         <span class="pill">Filtrer bort: <b>IFCPROJECT</b> / <b>IFCSITE</b> / <b>IFCBUILDING</b> / <b>IFCBUILDINGSTOREY</b></span>
         <span class="pill">Klikk i 3D = <b>toggle</b> inn/ut av liste</span>
-        <span class="pill">Ctrl/Shift i TC = <b>multi-select</b></span>
+        <span class="pill">Viewer selection = <b>kun 1 objekt</b></span>
       </div>
 
       <div class="row" style="gap:8px;">
         <button id="scanBtn" disabled style="width:auto;padding:10px 12px;">🔄 Oppdater liste</button>
         <button id="csvBtn" disabled style="width:auto;padding:10px 12px;">📤 Eksporter CSV</button>
         <button id="resetListBtn" disabled style="width:auto;padding:10px 12px;">🗑️ Tøm liste</button>
-        <button id="clearBtn" disabled style="width:auto;padding:10px 12px;">🧹 Fjern påskrift</button>
+        <button id="markBtn" disabled style="width:auto;padding:10px 12px;">⏸️ Stopp påskrift</button>
       </div>
     </div>
 
@@ -143,7 +143,7 @@
 
     <div class="muted hint">
       Tips: Slå på <b>Markups/Annotations</b> i viewer for å se tekst.<br>
-      <b>NB:</b> Markup API lar oss ikke styre font/size direkte. For å unngå overlapp ved zoom ut, gjør vi teksten <b>kortere</b> automatisk (færre linjer).
+      <b>NB:</b> Markup API lar oss ikke styre font/size direkte.
     </div>
   </div>
 
@@ -181,7 +181,7 @@
 
   const IGNORE_TYPES = new Set(["IFCPROJECT","IFCSITE","IFCBUILDING","IFCBUILDINGSTOREY"]);
 
-  // Guards: løser "Tøm liste" -> gamle objekter popper tilbake
+  // Selection guards
   let lastSelectionSnapshot = "";
   let lastProgrammaticSnapshot = "";
   let selectionLockUntil = 0;
@@ -190,21 +190,24 @@
   let refreshRunId = 0;
   let camDebounce = null;
 
-  // Zoom-ut terskel for å korte ned tekst
+  // Zoom-out terskel for å korte ned tekst
   const COMPACT_DISTANCE_M = 120;
 
-  // ✅ Plassering/luft (mm) – juster her hvis ønskelig
-  const LABEL_EXTRA_GAP_MM = 180;    // luft fra topp av objekt før linja starter
-  const LABEL_LIFT_MM = 650;         // hvor høyt over objektet teksten "løftes"
-  const LABEL_LINE_LEN_MM = 1200;    // lengde på lederlinje
+  // ✅ Påskrift enable/disable (løser “påskrift fortsetter å komme tilbake”)
+  let markupsEnabled = true;
+
+  // ✅ Plassering/luft (mm) – mer luft + lengre lederlinje
+  const LABEL_EXTRA_GAP_MM = 180;
+  const LABEL_LIFT_MM = 650;
+  const LABEL_LINE_LEN_MM = 1200;
 
   const els = {
     status: document.getElementById("status"),
     error: document.getElementById("error"),
     scanBtn: document.getElementById("scanBtn"),
-    clearBtn: document.getElementById("clearBtn"),
     csvBtn: document.getElementById("csvBtn"),
     resetListBtn: document.getElementById("resetListBtn"),
+    markBtn: document.getElementById("markBtn"),
     countInfo: document.getElementById("countInfo"),
     tbody: document.getElementById("tbody"),
     psetA: document.getElementById("psetA"),
@@ -244,6 +247,16 @@
     const str = String(value);
     if (/[;\n\r"]/.test(str)) return '"' + str.replace(/"/g,'""') + '"';
     return str;
+  }
+
+  function updateMarkupButton(){
+    if (markupsEnabled){
+      els.markBtn.textContent = "⏸️ Stopp påskrift";
+      els.markBtn.style.background = "var(--danger)";
+    }else{
+      els.markBtn.textContent = "▶️ Start påskrift";
+      els.markBtn.style.background = "var(--success)";
+    }
   }
 
   function psetNameOf(ps){ return norm(ps?.name || ps?.set || ""); }
@@ -424,27 +437,32 @@
   }
 
   function scheduleRebuildMarkupsOnly(){
+    if (!markupsEnabled) return;
     if (camDebounce) clearTimeout(camDebounce);
     camDebounce = setTimeout(async () => { await rebuildMarkupsOnly(); }, 220);
   }
 
   async function clearMarkups(){
     try{
-      if (API?.markup?.removeMarkups && lastMarkupIds.length){
+      if (!API?.markup) return;
+
+      // Fallback først: removeAllMarkups hvis finnes
+      if (typeof API.markup.removeAllMarkups === "function"){
+        await API.markup.removeAllMarkups();
+      }else if (typeof API.markup.removeMarkups === "function" && lastMarkupIds.length){
         await API.markup.removeMarkups(lastMarkupIds.slice());
       }
     }catch(e){
-      console.warn("removeMarkups feilet:", e);
+      console.warn("Fjerning av markups feilet:", e);
     }finally{
       lastMarkupIds = [];
-      els.clearBtn.disabled = true;
     }
   }
 
   // ✅ Større spredning (anti-overlapp)
   function staggerOffsetMm(index){
-    const stepY = 220; // mm (større enn før)
-    const stepX = 220; // mm (større enn før)
+    const stepY = 220; // mm
+    const stepX = 220; // mm
     const row = index % 6;
     const col = Math.floor(index / 6) % 2;
 
@@ -455,7 +473,7 @@
     };
   }
 
-  // ✅ Plasserer teksten høyere og med lengre lederlinje (mindre "tett på objektet")
+  // ✅ Plasserer teksten høyere og med lengre lederlinje
   async function addTextMarkupOverObject(modelId, runtimeId, text, indexForStagger){
     if (!API?.markup?.addTextMarkup) throw new Error("MarkupAPI ikke tilgjengelig (addTextMarkup).");
 
@@ -503,29 +521,16 @@
     return parts.sort().join("|");
   }
 
-  async function setViewerSelectionSafe(modelObjectIds, msAfter=450){
-    lastProgrammaticSnapshot = selectionToSnapshot((modelObjectIds||[]).map(x => ({
-      modelId: x.modelId,
-      objectRuntimeIds: x.objectRuntimeIds
+  async function setViewerSelectionSafeSingle(modelId, runtimeId, msAfter=450){
+    const modelObjectIds = [{ modelId, objectRuntimeIds: [Number(runtimeId)] }];
+    lastProgrammaticSnapshot = selectionToSnapshot(modelObjectIds.map(x => ({
+      modelId: x.modelId, objectRuntimeIds: x.objectRuntimeIds
     })));
 
     await withSelectionSuppressed(async () => {
       try{ await API.viewer.setSelection({ modelObjectIds }, "replace"); }
       catch(e){ console.warn("setSelection feilet:", e); }
     }, msAfter);
-  }
-
-  async function syncViewerSelectionFromPicked(){
-    const byModel = new Map();
-    for (const item of picked.values()){
-      if (!byModel.has(item.modelId)) byModel.set(item.modelId, []);
-      byModel.get(item.modelId).push(Number(item.runtimeId));
-    }
-    const modelObjectIds = [];
-    for (const [modelId, ids] of byModel.entries()){
-      modelObjectIds.push({ modelId, objectRuntimeIds: ids });
-    }
-    await setViewerSelectionSafe(modelObjectIds, 450);
   }
 
   function updateButtonsAndTableEmpty(){
@@ -539,6 +544,12 @@
   }
 
   async function rebuildMarkupsOnly(){
+    // ✅ Hvis påskrift er stoppet: sørg for at ingenting blir “gjenopprettet”
+    if (!markupsEnabled){
+      await clearMarkups();
+      return;
+    }
+
     if (!picked.size){
       await clearMarkups();
       updateButtonsAndTableEmpty();
@@ -566,7 +577,6 @@
         if (mid != null){ lastMarkupIds.push(mid); made++; }
       }
 
-      els.clearBtn.disabled = !lastMarkupIds.length;
       setStatus(zoomedOut ? `Zoom ut: kortere tekst. Påskrifter: ${made}.` : `Zoom inn: full tekst. Påskrifter: ${made}.`);
     }catch(e){
       console.error(e);
@@ -650,10 +660,8 @@
         tr.addEventListener("click", async () => {
           const modelId = tr.getAttribute("data-m");
           const rid = tr.getAttribute("data-r");
-          await withSelectionSuppressed(async () => {
-            try{ await API.viewer.setSelection({ modelObjectIds: [{ modelId, objectRuntimeIds: [Number(rid)] }] }, "replace"); }catch{}
-            try{ await API.viewer.setCamera({ modelObjectIds: [{ modelId, objectRuntimeIds: [Number(rid)] }] }, { animationTime: 650 }); }catch{}
-          }, 250);
+          await setViewerSelectionSafeSingle(modelId, rid, 250);
+          try{ await API.viewer.setCamera({ modelObjectIds: [{ modelId, objectRuntimeIds: [Number(rid)] }] }, { animationTime: 650 }); }catch{}
         });
       });
 
@@ -724,8 +732,26 @@
     lastSelectionSnapshot = "";
     lastProgrammaticSnapshot = "";
 
-    await setViewerSelectionSafe([], 900);
+    await withSelectionSuppressed(async () => {
+      try{ await API.viewer.setSelection({ modelObjectIds: [] }, "replace"); }catch{}
+    }, 900);
+
     setStatus("🗑️ Listen er tømt (tabell + selection + påskrift).");
+  }
+
+  // ✅ Hent “siste klikkede” objekt fra selection payload
+  function getLastSelectedFromSelection(selection){
+    if (!selection || !selection.length) return null;
+    // Finn siste non-empty modell-blokk
+    for (let i = selection.length - 1; i >= 0; i--){
+      const s = selection[i];
+      const ids = (s?.objectRuntimeIds || []);
+      if (s?.modelId && ids.length){
+        const rid = ids[ids.length - 1];
+        return { modelId: s.modelId, runtimeId: rid };
+      }
+    }
+    return null;
   }
 
   async function handleSelectionChanged(selection){
@@ -739,37 +765,18 @@
     if (snap === lastSelectionSnapshot) return;
     lastSelectionSnapshot = snap;
 
-    const keys = [];
-    for (const s of (selection || [])){
-      for (const rid of (s.objectRuntimeIds || [])){
-        keys.push(`${s.modelId}:${rid}`);
-      }
-    }
-    if (!keys.length) return;
+    const last = getLastSelectedFromSelection(selection);
+    if (!last) return;
 
-    // 1 objekt: toggle
-    if (keys.length === 1){
-      const key = keys[0];
-      if (picked.has(key)) picked.delete(key);
-      else {
-        const [modelId, runtimeId] = key.split(":");
-        picked.set(key, { modelId, runtimeId });
-      }
-      await syncViewerSelectionFromPicked();
-      await refreshFromPicked();
-      return;
-    }
+    const key = `${last.modelId}:${last.runtimeId}`;
 
-    // Multi: sett listen lik selection
-    picked.clear();
-    for (const s of selection){
-      for (const rid of (s.objectRuntimeIds || [])){
-        const key = `${s.modelId}:${rid}`;
-        picked.set(key, { modelId: s.modelId, runtimeId: rid });
-      }
-    }
+    // Toggle inn/ut av liste
+    if (picked.has(key)) picked.delete(key);
+    else picked.set(key, { modelId: last.modelId, runtimeId: last.runtimeId });
 
-    await syncViewerSelectionFromPicked();
+    // ✅ Viktig: tving viewer selection til KUN 1 objekt (løser “2 valgte objekter”)
+    await setViewerSelectionSafeSingle(last.modelId, last.runtimeId, 250);
+
     await refreshFromPicked();
   }
 
@@ -817,7 +824,7 @@
       fillPsetSelect(els.psetB, psetNames);
       fillPsetSelect(els.psetC, psetNames);
 
-      setStatus("Ferdig skannet. Velg Pset/properties og klikk objekter i 3D (multi).");
+      setStatus("Ferdig skannet. Velg Pset/properties og klikk objekter i 3D.");
     }catch(e){
       console.error(e);
       setError("Skann-feil: " + (e.message || e));
@@ -845,10 +852,13 @@
       API = await TrimbleConnectWorkspace.connect(window.parent, onWorkspaceEvent, 30000);
 
       els.scanBtn.disabled = false;
-      els.clearBtn.disabled = false;
+      els.markBtn.disabled = false;
+      updateMarkupButton();
       setStatus("✅ Tilkoblet. Trykk «Oppdater liste» for å fylle Pset/Property.");
 
+      // Poll kamera (men bare når påskrift er aktiv)
       setInterval(async () => {
+        if (!markupsEnabled) return;
         if (!picked.size) return;
         scheduleRebuildMarkupsOnly();
       }, 1200);
@@ -863,9 +873,19 @@
   els.scanBtn.addEventListener("click", scanPsets);
   els.csvBtn.addEventListener("click", exportCSV);
   els.resetListBtn.addEventListener("click", resetPickedList);
-  els.clearBtn.addEventListener("click", async () => {
-    await clearMarkups();
-    setStatus("🧹 Påskrift fjernet (listen beholdes).");
+
+  // ✅ Toggle påskrift: stopper at de “kommer tilbake” ved camera/andre events
+  els.markBtn.addEventListener("click", async () => {
+    markupsEnabled = !markupsEnabled;
+    updateMarkupButton();
+
+    if (!markupsEnabled){
+      await clearMarkups();
+      setStatus("⏸️ Påskrift stoppet og fjernet. (Start igjen med knappen.)");
+    }else{
+      setStatus("▶️ Påskrift aktivert.");
+      await rebuildMarkupsOnly();
+    }
   });
 
   els.psetA.addEventListener("change", () => onPsetChanged(els.psetA, els.a));
