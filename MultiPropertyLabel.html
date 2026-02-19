@@ -57,6 +57,10 @@
     #markBtn{background:var(--danger);}
     button:disabled{opacity:.6;cursor:not-allowed;}
 
+    .colorRow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+    .colorRow label{margin:0;font-weight:800;font-size:12px;}
+    .colorSelect{width:auto;min-width:160px;}
+
     table{width:100%;border-collapse:collapse;font-size:12px;}
     th,td{padding:8px;border-bottom:1px solid #eef2f7;text-align:left;vertical-align:top;}
     th{background:#f8fafc;position:sticky;top:0;z-index:1;}
@@ -97,7 +101,17 @@
         <span class="pill">Påskrift = <b>ingen kryssing</b> (vertikale leaderlines)</span>
       </div>
 
-      <div class="row" style="gap:8px;">
+      <div class="row" style="gap:8px;align-items:center;">
+        <div class="colorRow">
+          <label for="colorSel">Farge:</label>
+          <select id="colorSel" class="colorSelect" disabled>
+            <option value="blue">Blå</option>
+            <option value="red">Rød</option>
+            <option value="green">Grønn</option>
+            <option value="yellow">Gul</option>
+          </select>
+        </div>
+
         <button id="scanBtn" disabled style="width:auto;padding:10px 12px;">🔄 Oppdater liste</button>
         <button id="csvBtn" disabled style="width:auto;padding:10px 12px;">📤 Eksporter CSV</button>
         <button id="resetListBtn" disabled style="width:auto;padding:10px 12px;">🗑️ Tøm liste</button>
@@ -175,7 +189,7 @@
   const ifcGuidCache = new Map();
 
   let lastMarkupIds = [];
-  const picked = new Map(); // key modelId:runtimeId -> {modelId,runtimeId,name,guid,fullText,compactText}
+  const picked = new Map();
 
   const IGNORE_TYPES = new Set(["IFCPROJECT","IFCSITE","IFCBUILDING","IFCBUILDINGSTOREY"]);
 
@@ -189,16 +203,25 @@
 
   const COMPACT_DISTANCE_M = 120;
 
-  // Påskrift enable/disable
   let markupsEnabled = true;
 
   // === NO-CROSS PARAMS ===
-  // Stor vertikal spacing mellom labels (mm) -> mindre overlapp
-  const NO_CROSS_STEP_Y_MM = 420;       // ØK hvis du vil ha enda mer luft
-  const LABEL_BASE_GAP_MM = 180;        // Luft over objekt før linje starter
-  const LABEL_TOP_LIFT_MM = 1400;       // Løft tekst høyt opp
-  const LABEL_LINE_LEN_MM = 1600;       // Lang lederlinje (end høyt)
-  // =======================
+  const NO_CROSS_STEP_Y_MM = 420;
+  const LABEL_BASE_GAP_MM = 180;
+  const LABEL_TOP_LIFT_MM = 1400;
+  const LABEL_LINE_LEN_MM = 1600;
+
+  // === COLOR SUPPORT ===
+  const COLOR_MAP = {
+    blue:   { r: 0,   g: 0,   b: 204, a: 255 },
+    red:    { r: 220, g: 0,   b: 0,   a: 255 },
+    green:  { r: 0,   g: 160, b: 0,   a: 255 },
+    yellow: { r: 245, g: 180, b: 0,   a: 255 }
+  };
+  let selectedColorKey = "blue";
+  function currentMarkupColor(){
+    return COLOR_MAP[selectedColorKey] || COLOR_MAP.blue;
+  }
 
   const els = {
     status: document.getElementById("status"),
@@ -207,6 +230,7 @@
     csvBtn: document.getElementById("csvBtn"),
     resetListBtn: document.getElementById("resetListBtn"),
     markBtn: document.getElementById("markBtn"),
+    colorSel: document.getElementById("colorSel"),
     countInfo: document.getElementById("countInfo"),
     tbody: document.getElementById("tbody"),
     psetA: document.getElementById("psetA"),
@@ -442,7 +466,6 @@
   async function clearMarkups(){
     try{
       if (!API?.markup) return;
-
       if (typeof API.markup.removeAllMarkups === "function"){
         await API.markup.removeAllMarkups();
       }else if (typeof API.markup.removeMarkups === "function" && lastMarkupIds.length){
@@ -455,7 +478,6 @@
     }
   }
 
-  // === NO-CROSS: dx=0 (kun vertikalt), dy øker kraftig pr. objekt ===
   function staggerOffsetMm(index){
     return { dx: 0, dy: index * NO_CROSS_STEP_Y_MM, dz: 0 };
   }
@@ -474,8 +496,8 @@
     const topY_mm = (max.y) * 1000;
 
     const st = staggerOffsetMm(indexForStagger || 0);
+    const color = currentMarkupColor();
 
-    // start og end har samme X/Z -> vertikal linje -> kan ikke krysse andre vertikale linjer
     const start = {
       positionX: cx_mm,
       positionY: topY_mm + LABEL_BASE_GAP_MM + st.dy,
@@ -492,7 +514,7 @@
 
     const created = await API.markup.addTextMarkup([{
       start, end, text,
-      color: { r: 0, g: 0, b: 204, a: 255 }
+      color
     }]);
 
     if (created && created.length && typeof created[0].id === "number") return created[0].id;
@@ -549,7 +571,6 @@
       await clearMarkups();
       if (myRun !== refreshRunId) return;
 
-      // Stabil rekkefølge: sortér på modelId+runtimeId -> gir forutsigbar stacking
       const items = Array.from(picked.values()).slice().sort((a,b) => {
         const am = String(a.modelId), bm = String(b.modelId);
         if (am !== bm) return am.localeCompare(bm);
@@ -837,6 +858,10 @@
 
       els.scanBtn.disabled = false;
       els.markBtn.disabled = false;
+      els.colorSel.disabled = false;
+
+      // default
+      selectedColorKey = els.colorSel.value || "blue";
       updateMarkupButton();
 
       setStatus("✅ Tilkoblet. Trykk «Oppdater liste» for å fylle Pset/Property.");
@@ -853,10 +878,12 @@
     }
   }
 
+  // UI wiring
   els.scanBtn.addEventListener("click", scanPsets);
   els.csvBtn.addEventListener("click", exportCSV);
   els.resetListBtn.addEventListener("click", resetPickedList);
 
+  // Toggle påskrift
   els.markBtn.addEventListener("click", async () => {
     markupsEnabled = !markupsEnabled;
     updateMarkupButton();
@@ -867,6 +894,17 @@
     }else{
       setStatus("▶️ Påskrift aktivert.");
       await rebuildMarkupsOnly();
+    }
+  });
+
+  // ✅ Fargevalg: rebuild for å oppdatere fargen på eksisterende markups
+  els.colorSel.addEventListener("change", async () => {
+    selectedColorKey = els.colorSel.value || "blue";
+    if (markupsEnabled){
+      await rebuildMarkupsOnly();
+      setStatus(`🎨 Farge endret til: ${els.colorSel.options[els.colorSel.selectedIndex].text}`);
+    }else{
+      setStatus(`🎨 Farge valgt: ${els.colorSel.options[els.colorSel.selectedIndex].text} (start påskrift for å vise).`);
     }
   });
 
