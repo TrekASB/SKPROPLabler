@@ -20,7 +20,6 @@
       box-shadow:0 1px 3px rgba(15,23,42,.08);flex:0 0 auto;
     }
     .logoWrap img{width:84px;height:84px;object-fit:contain;display:block;}
-
     .titleBlock{display:flex;flex-direction:column;gap:2px;}
     .title{font-weight:900;font-size:18px;color:var(--primary);line-height:1.1;}
     .org{font-size:13px;font-weight:700;color:#111827;line-height:1.1;}
@@ -65,7 +64,6 @@
     tr.clickable{cursor:pointer;}
     tr.clickable:hover td{background:#eef6ff;}
     .scroll{max-height:560px;overflow:auto;border:1px solid #eef2f7;border-radius:12px;margin-top:10px;}
-
     .hint{margin-top:10px;line-height:1.5;}
     .pill{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:999px;border:1px solid #e5e7eb;background:#fff;font-size:11px;color:var(--muted);}
     .pill b{color:#111827;}
@@ -96,7 +94,7 @@
       <div class="row" style="gap:8px;align-items:center;">
         <span class="pill">Filtrer bort: <b>IFCPROJECT</b> / <b>IFCSITE</b> / <b>IFCBUILDING</b> / <b>IFCBUILDINGSTOREY</b></span>
         <span class="pill">Klikk i 3D = <b>toggle</b> inn/ut av liste</span>
-        <span class="pill">Viewer selection = <b>kun 1 objekt</b></span>
+        <span class="pill">Påskrift = <b>ingen kryssing</b> (vertikale leaderlines)</span>
       </div>
 
       <div class="row" style="gap:8px;">
@@ -143,7 +141,7 @@
 
     <div class="muted hint">
       Tips: Slå på <b>Markups/Annotations</b> i viewer for å se tekst.<br>
-      <b>NB:</b> Markup API lar oss ikke styre font/size direkte.
+      NB: Markup API lar oss ikke styre font/size direkte, så vi løser lesbarhet via spacing.
     </div>
   </div>
 
@@ -181,7 +179,6 @@
 
   const IGNORE_TYPES = new Set(["IFCPROJECT","IFCSITE","IFCBUILDING","IFCBUILDINGSTOREY"]);
 
-  // Selection guards
   let lastSelectionSnapshot = "";
   let lastProgrammaticSnapshot = "";
   let selectionLockUntil = 0;
@@ -190,16 +187,18 @@
   let refreshRunId = 0;
   let camDebounce = null;
 
-  // Zoom-out terskel for å korte ned tekst
   const COMPACT_DISTANCE_M = 120;
 
-  // ✅ Påskrift enable/disable (løser “påskrift fortsetter å komme tilbake”)
+  // Påskrift enable/disable
   let markupsEnabled = true;
 
-  // ✅ Plassering/luft (mm) – mer luft + lengre lederlinje
-  const LABEL_EXTRA_GAP_MM = 180;
-  const LABEL_LIFT_MM = 650;
-  const LABEL_LINE_LEN_MM = 1200;
+  // === NO-CROSS PARAMS ===
+  // Stor vertikal spacing mellom labels (mm) -> mindre overlapp
+  const NO_CROSS_STEP_Y_MM = 420;       // ØK hvis du vil ha enda mer luft
+  const LABEL_BASE_GAP_MM = 180;        // Luft over objekt før linje starter
+  const LABEL_TOP_LIFT_MM = 1400;       // Løft tekst høyt opp
+  const LABEL_LINE_LEN_MM = 1600;       // Lang lederlinje (end høyt)
+  // =======================
 
   const els = {
     status: document.getElementById("status"),
@@ -379,7 +378,6 @@
     return undefined;
   }
 
-  // ✅ Kun verdier (ingen Pset-navn / property-navn)
   function buildFullText(config, objProps){
     const lines = [];
     for (const block of config){
@@ -395,7 +393,6 @@
     return lines.join("\n");
   }
 
-  // ✅ Kompakt: første verdi per Pset-blokk (ingen navn)
   function buildCompactText(config, objProps){
     const lines = [];
     for (const block of config){
@@ -446,7 +443,6 @@
     try{
       if (!API?.markup) return;
 
-      // Fallback først: removeAllMarkups hvis finnes
       if (typeof API.markup.removeAllMarkups === "function"){
         await API.markup.removeAllMarkups();
       }else if (typeof API.markup.removeMarkups === "function" && lastMarkupIds.length){
@@ -459,21 +455,11 @@
     }
   }
 
-  // ✅ Større spredning (anti-overlapp)
+  // === NO-CROSS: dx=0 (kun vertikalt), dy øker kraftig pr. objekt ===
   function staggerOffsetMm(index){
-    const stepY = 220; // mm
-    const stepX = 220; // mm
-    const row = index % 6;
-    const col = Math.floor(index / 6) % 2;
-
-    return {
-      dy: row * stepY,
-      dx: (col === 0 ? -stepX : stepX) * (row % 2 ? 1 : -1),
-      dz: 0
-    };
+    return { dx: 0, dy: index * NO_CROSS_STEP_Y_MM, dz: 0 };
   }
 
-  // ✅ Plasserer teksten høyere og med lengre lederlinje
   async function addTextMarkupOverObject(modelId, runtimeId, text, indexForStagger){
     if (!API?.markup?.addTextMarkup) throw new Error("MarkupAPI ikke tilgjengelig (addTextMarkup).");
 
@@ -489,17 +475,18 @@
 
     const st = staggerOffsetMm(indexForStagger || 0);
 
+    // start og end har samme X/Z -> vertikal linje -> kan ikke krysse andre vertikale linjer
     const start = {
-      positionX: cx_mm + st.dx,
-      positionY: topY_mm + LABEL_EXTRA_GAP_MM + st.dy,
-      positionZ: cz_mm + st.dz,
+      positionX: cx_mm,
+      positionY: topY_mm + LABEL_BASE_GAP_MM + st.dy,
+      positionZ: cz_mm,
       modelId, objectId: runtimeId
     };
 
     const end = {
-      positionX: cx_mm + st.dx,
-      positionY: topY_mm + LABEL_LIFT_MM + LABEL_LINE_LEN_MM + st.dy,
-      positionZ: cz_mm + st.dz,
+      positionX: cx_mm,
+      positionY: topY_mm + LABEL_TOP_LIFT_MM + LABEL_LINE_LEN_MM + st.dy,
+      positionZ: cz_mm,
       modelId, objectId: runtimeId
     };
 
@@ -528,8 +515,7 @@
     })));
 
     await withSelectionSuppressed(async () => {
-      try{ await API.viewer.setSelection({ modelObjectIds }, "replace"); }
-      catch(e){ console.warn("setSelection feilet:", e); }
+      try{ await API.viewer.setSelection({ modelObjectIds }, "replace"); }catch{}
     }, msAfter);
   }
 
@@ -544,7 +530,6 @@
   }
 
   async function rebuildMarkupsOnly(){
-    // ✅ Hvis påskrift er stoppet: sørg for at ingenting blir “gjenopprettet”
     if (!markupsEnabled){
       await clearMarkups();
       return;
@@ -564,16 +549,22 @@
       await clearMarkups();
       if (myRun !== refreshRunId) return;
 
-      let idx = 0;
-      let made = 0;
+      // Stabil rekkefølge: sortér på modelId+runtimeId -> gir forutsigbar stacking
+      const items = Array.from(picked.values()).slice().sort((a,b) => {
+        const am = String(a.modelId), bm = String(b.modelId);
+        if (am !== bm) return am.localeCompare(bm);
+        return Number(a.runtimeId) - Number(b.runtimeId);
+      });
 
-      for (const it of picked.values()){
+      let made = 0;
+      for (let idx=0; idx<items.length; idx++){
         if (myRun !== refreshRunId) return;
+        const it = items[idx];
 
         const text = zoomedOut ? (it.compactText || it.fullText || "") : (it.fullText || "");
         if (!norm(text)) continue;
 
-        const mid = await addTextMarkupOverObject(it.modelId, Number(it.runtimeId), text, idx++);
+        const mid = await addTextMarkupOverObject(it.modelId, Number(it.runtimeId), text, idx);
         if (mid != null){ lastMarkupIds.push(mid); made++; }
       }
 
@@ -680,7 +671,6 @@
 
   async function exportCSV(){
     if (!picked.size){ setError("Ingen objekter i listen å eksportere."); return; }
-
     await refreshFromPicked();
 
     const config = getConfig();
@@ -739,10 +729,8 @@
     setStatus("🗑️ Listen er tømt (tabell + selection + påskrift).");
   }
 
-  // ✅ Hent “siste klikkede” objekt fra selection payload
   function getLastSelectedFromSelection(selection){
     if (!selection || !selection.length) return null;
-    // Finn siste non-empty modell-blokk
     for (let i = selection.length - 1; i >= 0; i--){
       const s = selection[i];
       const ids = (s?.objectRuntimeIds || []);
@@ -769,14 +757,10 @@
     if (!last) return;
 
     const key = `${last.modelId}:${last.runtimeId}`;
-
-    // Toggle inn/ut av liste
     if (picked.has(key)) picked.delete(key);
     else picked.set(key, { modelId: last.modelId, runtimeId: last.runtimeId });
 
-    // ✅ Viktig: tving viewer selection til KUN 1 objekt (løser “2 valgte objekter”)
     await setViewerSelectionSafeSingle(last.modelId, last.runtimeId, 250);
-
     await refreshFromPicked();
   }
 
@@ -854,9 +838,9 @@
       els.scanBtn.disabled = false;
       els.markBtn.disabled = false;
       updateMarkupButton();
+
       setStatus("✅ Tilkoblet. Trykk «Oppdater liste» for å fylle Pset/Property.");
 
-      // Poll kamera (men bare når påskrift er aktiv)
       setInterval(async () => {
         if (!markupsEnabled) return;
         if (!picked.size) return;
@@ -869,12 +853,10 @@
     }
   }
 
-  // UI wiring
   els.scanBtn.addEventListener("click", scanPsets);
   els.csvBtn.addEventListener("click", exportCSV);
   els.resetListBtn.addEventListener("click", resetPickedList);
 
-  // ✅ Toggle påskrift: stopper at de “kommer tilbake” ved camera/andre events
   els.markBtn.addEventListener("click", async () => {
     markupsEnabled = !markupsEnabled;
     updateMarkupButton();
@@ -891,7 +873,6 @@
   els.psetA.addEventListener("change", () => onPsetChanged(els.psetA, els.a));
   els.psetB.addEventListener("change", () => onPsetChanged(els.psetB, els.b));
   els.psetC.addEventListener("change", () => onPsetChanged(els.psetC, els.c));
-
   [...els.a, ...els.b, ...els.c].forEach(sel => sel.addEventListener("change", refreshFromPicked));
 
   connect();
