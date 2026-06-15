@@ -167,6 +167,72 @@
       color: var(--accent);
     }
 
+    /* ── Model/filter panel ── */
+    .model-panel {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      width: min(320px, calc(100% - 88px));
+      background: rgba(34, 40, 64, .94);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 8px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 6px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.25);
+      z-index: 4;
+    }
+
+    #modelSelector {
+      min-width: 0;
+      background: #171c2b;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 6px 8px;
+      font-size: 11px;
+      outline: none;
+    }
+
+    .mini-btn {
+      border: 1px solid var(--border);
+      background: #171c2b;
+      color: var(--text);
+      border-radius: 7px;
+      padding: 0 9px;
+      font-size: 11px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .mini-btn:hover { background: var(--primary); color: #fff; }
+
+    .filter-row {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 10px;
+      color: var(--muted);
+    }
+
+    .filter-row label {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .filter-row input { accent-color: #00d4ff; }
+
+    .level-badge {
+      left: auto;
+      right: 66px;
+      z-index: 3;
+    }
+
     /* ── No-data overlay ── */
     #overlay {
       position: absolute;
@@ -223,8 +289,21 @@
     <text x="24" y="14" text-anchor="middle" font-size="6" font-weight="900" fill="var(--accent)" font-family="system-ui">N</text>
   </svg>
 
+  <!-- Model/filter panel -->
+  <div class="model-panel">
+    <select id="modelSelector" title="Velg modell / fil i 2D-vinduet">
+      <option value="__all__">Alle modeller</option>
+    </select>
+    <button class="mini-btn" id="zoomModel" title="Zoom til valgt modell">Zoom</button>
+    <div class="filter-row">
+      <label><input type="checkbox" id="showModels" checked> Vis modeller i kart</label>
+      <label><input type="checkbox" id="filterSelectedOnly"> Kun valgt modell</label>
+      <span id="modelCount">0 filer</span>
+    </div>
+  </div>
+
   <!-- Level badge -->
-  <div class="level-badge" id="levelBadge">Etasje –</div>
+  <div class="level-badge" id="levelBadge">Z –</div>
 
   <!-- Zoom controls -->
   <div class="controls">
@@ -272,6 +351,11 @@ let autoFit  = true;   // fit-to-view until user pans/zooms
 
 // Bounding box, updated over time
 let bbox = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
+let modelBounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
+let models2d = [];
+let selectedModelId = "__all__";
+let showModelsInMap = true;
+let filterSelectedOnly = false;
 
 // Trail
 const trail = [];
@@ -297,16 +381,42 @@ ro.observe(canvas);
 // ─────────────────────────────────────────────
 //  Auto-fit
 // ─────────────────────────────────────────────
-function fitView() {
-  if (!hasData) return;
+function hasValidBounds(b) {
+  return Number.isFinite(b.minX) && Number.isFinite(b.maxX) &&
+         Number.isFinite(b.minY) && Number.isFinite(b.maxY) &&
+         b.maxX > b.minX && b.maxY > b.minY;
+}
+
+function getActiveBounds() {
+  if (filterSelectedOnly && selectedModelId !== "__all__") {
+    const m = models2d.find(x => String(x.id) === String(selectedModelId));
+    if (m?.bounds && hasValidBounds(m.bounds)) return m.bounds;
+  }
+  if (hasValidBounds(modelBounds)) return modelBounds;
+  return bbox;
+}
+
+function fitView(bounds = null) {
+  const b = bounds || getActiveBounds();
+  if (!hasValidBounds(b)) return;
   const pad = 60;
-  const W = canvas.width  - pad * 2;
-  const H = canvas.height - pad * 2;
-  const mW = bbox.maxX - bbox.minX || 10;
-  const mH = bbox.maxY - bbox.minY || 10;
+  const W = Math.max(canvas.width  - pad * 2, 10);
+  const H = Math.max(canvas.height - pad * 2, 10);
+  const mW = b.maxX - b.minX || 10;
+  const mH = b.maxY - b.minY || 10;
   scale = Math.min(W / mW, H / mH, 80);
-  offsetX = canvas.width  / 2 - (bbox.minX + mW / 2) * scale;
-  offsetY = canvas.height / 2 + (bbox.minY + mH / 2) * scale;
+  offsetX = canvas.width  / 2 - (b.minX + mW / 2) * scale;
+  offsetY = canvas.height / 2 + (b.minY + mH / 2) * scale;
+}
+
+function zoomToSelectedModel() {
+  autoFit = false;
+  if (selectedModelId === "__all__") fitView(modelBounds);
+  else {
+    const m = models2d.find(x => String(x.id) === String(selectedModelId));
+    if (m?.bounds) fitView(m.bounds);
+  }
+  draw();
 }
 
 // ─────────────────────────────────────────────
@@ -335,6 +445,9 @@ function draw() {
   drawGrid(W, H);
 
   if (!hasData) return;
+
+  // Model footprints / filter area
+  drawModels();
 
   // Trail
   drawTrail();
@@ -381,6 +494,49 @@ function drawGrid(W, H) {
   ctx.beginPath(); ctx.moveTo(ox, 0); ctx.lineTo(ox, H); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(0, oy); ctx.lineTo(W, oy); ctx.stroke();
   ctx.setLineDash([]);
+}
+
+function drawModels() {
+  if (!showModelsInMap || !models2d.length) return;
+
+  const visibleModels = models2d.filter(m => {
+    if (!m.bounds || !hasValidBounds(m.bounds)) return false;
+    if (filterSelectedOnly && selectedModelId !== "__all__") {
+      return String(m.id) === String(selectedModelId);
+    }
+    return true;
+  });
+
+  for (const m of visibleModels) {
+    const b = m.bounds;
+    const p1 = toCanvas(b.minX, b.minY);
+    const p2 = toCanvas(b.maxX, b.maxY);
+    const x = Math.min(p1.cx, p2.cx);
+    const y = Math.min(p1.cy, p2.cy);
+    const w = Math.abs(p2.cx - p1.cx);
+    const h = Math.abs(p2.cy - p1.cy);
+    const selected = String(m.id) === String(selectedModelId);
+
+    ctx.save();
+    ctx.fillStyle = selected ? "rgba(0,212,255,0.16)" : "rgba(123,130,160,0.10)";
+    ctx.strokeStyle = selected ? "rgba(0,212,255,0.95)" : "rgba(123,130,160,0.45)";
+    ctx.lineWidth = selected ? 2 : 1;
+    ctx.setLineDash(selected ? [] : [5, 4]);
+    ctx.beginPath();
+    ctx.rect(x, y, Math.max(w, 3), Math.max(h, 3));
+    ctx.fill();
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    if (w > 45 && h > 18) {
+      ctx.fillStyle = selected ? "#00d4ff" : "rgba(232,234,240,.65)";
+      ctx.font = "10px system-ui, sans-serif";
+      ctx.textBaseline = "top";
+      const label = (m.name || "Modell").slice(0, 36);
+      ctx.fillText(label, x + 5, y + 4);
+    }
+    ctx.restore();
+  }
 }
 
 function drawTrail() {
@@ -439,23 +595,44 @@ function drawFOV(px, py) {
 }
 
 function drawMarker(px, py) {
-  // Outer ring
-  ctx.beginPath();
-  ctx.arc(px, py, 9, 0, Math.PI * 2);
-  ctx.strokeStyle = "rgba(0,212,255,0.5)";
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
+  // Camera icon, rotated by current heading
+  const heading = Math.atan2(camDir.x, camDir.y);
 
-  // Inner dot
+  ctx.save();
+  ctx.translate(px, py);
+  ctx.rotate(heading);
+
+  // View direction nose
   ctx.beginPath();
-  ctx.arc(px, py, 5, 0, Math.PI * 2);
-  ctx.fillStyle = "#00d4ff";
+  ctx.moveTo(0, -16);
+  ctx.lineTo(7, -3);
+  ctx.lineTo(0, -7);
+  ctx.lineTo(-7, -3);
+  ctx.closePath();
+  ctx.fillStyle = "rgba(0,212,255,0.95)";
   ctx.fill();
 
-  // Pulse ring (simple static glow)
+  // Camera body
   ctx.beginPath();
-  ctx.arc(px, py, 13, 0, Math.PI * 2);
-  ctx.strokeStyle = "rgba(0,212,255,0.15)";
+  ctx.roundRect(-8, -3, 16, 12, 3);
+  ctx.fillStyle = "#00d4ff";
+  ctx.fill();
+  ctx.strokeStyle = "rgba(255,255,255,.55)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Lens
+  ctx.beginPath();
+  ctx.arc(0, 3, 3, 0, Math.PI * 2);
+  ctx.fillStyle = "#12151f";
+  ctx.fill();
+
+  ctx.restore();
+
+  // Static glow ring
+  ctx.beginPath();
+  ctx.arc(px, py, 15, 0, Math.PI * 2);
+  ctx.strokeStyle = "rgba(0,212,255,0.18)";
   ctx.lineWidth = 3;
   ctx.stroke();
 }
@@ -625,6 +802,121 @@ document.getElementById("resetView").addEventListener("click", () => {
   draw();
 });
 
+
+// ─────────────────────────────────────────────
+//  Models / file selector / bounding boxes
+// ─────────────────────────────────────────────
+function normaliseBounds(raw) {
+  if (!raw) return null;
+  const min = raw.min ?? raw.minimum ?? raw.minPoint ?? raw.boxMin ?? raw[0];
+  const max = raw.max ?? raw.maximum ?? raw.maxPoint ?? raw.boxMax ?? raw[1];
+  if (!min || !max) return null;
+  const b = {
+    minX: Number(min.x ?? min.X ?? min[0]),
+    maxX: Number(max.x ?? max.X ?? max[0]),
+    minY: Number(min.y ?? min.Y ?? min[1]),
+    maxY: Number(max.y ?? max.Y ?? max[1])
+  };
+  return hasValidBounds(b) ? b : null;
+}
+
+function mergeBounds(target, b) {
+  if (!b || !hasValidBounds(b)) return;
+  target.minX = Math.min(target.minX, b.minX);
+  target.maxX = Math.max(target.maxX, b.maxX);
+  target.minY = Math.min(target.minY, b.minY);
+  target.maxY = Math.max(target.maxY, b.maxY);
+}
+
+async function getModelBounds(model) {
+  const candidates = [
+    () => API.viewer?.getObjectBoundingBox?.(model.id),
+    () => API.viewer?.getObjectBoundingBox?.([model.id]),
+    () => API.viewer?.getModelBoundingBox?.(model.id),
+    () => API.viewer?.getBoundingBox?.(model.id),
+    () => API.viewer?.models?.getBoundingBox?.(model.id)
+  ];
+
+  for (const fn of candidates) {
+    try {
+      const result = await fn();
+      const b = normaliseBounds(result?.data ?? result);
+      if (b) return b;
+    } catch (_) { }
+  }
+
+  return null;
+}
+
+async function loadModels() {
+  const select = document.getElementById("modelSelector");
+  const count = document.getElementById("modelCount");
+  if (!API?.viewer) return;
+
+  let rawModels = [];
+  const candidates = [
+    () => API.viewer.getModels?.(),
+    () => API.viewer.models?.getAll?.(),
+    () => API.viewer.getLoadedModels?.()
+  ];
+
+  for (const fn of candidates) {
+    try {
+      const res = await fn();
+      rawModels = res?.data ?? res ?? [];
+      if (Array.isArray(rawModels) && rawModels.length) break;
+    } catch (_) { }
+  }
+
+  models2d = [];
+  modelBounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
+
+  for (const raw of rawModels) {
+    const id = raw.id ?? raw.modelId ?? raw.objectId ?? raw.guid ?? raw.fileId;
+    if (!id) continue;
+    const name = raw.name ?? raw.modelName ?? raw.fileName ?? raw.displayName ?? String(id);
+    const bounds = normaliseBounds(raw.boundingBox ?? raw.bounds ?? raw.bbox) || await getModelBounds({ id });
+    const model = { id, name, bounds };
+    models2d.push(model);
+    mergeBounds(modelBounds, bounds);
+  }
+
+  select.innerHTML = `<option value="__all__">Alle modeller</option>`;
+  for (const m of models2d) {
+    const opt = document.createElement("option");
+    opt.value = m.id;
+    opt.textContent = m.bounds ? m.name : `${m.name} (uten bbox)`;
+    select.appendChild(opt);
+  }
+
+  count.textContent = `${models2d.length} fil${models2d.length === 1 ? "" : "er"}`;
+
+  if (hasValidBounds(modelBounds)) {
+    hasData = true;
+    overlay.classList.add("hidden");
+    autoFit = true;
+    fitView(modelBounds);
+    draw();
+  }
+}
+
+document.getElementById("modelSelector").addEventListener("change", e => {
+  selectedModelId = e.target.value;
+  if (filterSelectedOnly) zoomToSelectedModel();
+  draw();
+});
+
+document.getElementById("zoomModel").addEventListener("click", zoomToSelectedModel);
+document.getElementById("showModels").addEventListener("change", e => {
+  showModelsInMap = e.target.checked;
+  draw();
+});
+document.getElementById("filterSelectedOnly").addEventListener("change", e => {
+  filterSelectedOnly = e.target.checked;
+  if (filterSelectedOnly) zoomToSelectedModel();
+  else draw();
+});
+
 // ─────────────────────────────────────────────
 //  Trimble Connect init
 // ─────────────────────────────────────────────
@@ -664,6 +956,8 @@ async function init() {
     try { await API.viewer?.subscribeToCamera?.(); } catch (_) {}
     try { await API.viewer?.enableCameraEvents?.(); } catch (_) {}
 
+    await loadModels();
+
     setStatus("live", "Tilkoblet");
     startDemoIfNoData();
 
@@ -702,6 +996,22 @@ function startDemoIfNoData() {
 }
 
 function startDemo() {
+  if (!models2d.length) {
+    models2d = [
+      { id: "demo_veg", name: "Demo Vegmodell", bounds: { minX: -22, maxX: 22, minY: -9, maxY: 9 } },
+      { id: "demo_va", name: "Demo VA-modell", bounds: { minX: -8, maxX: 30, minY: -18, maxY: -11 } }
+    ];
+    modelBounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
+    models2d.forEach(m => mergeBounds(modelBounds, m.bounds));
+    const select = document.getElementById("modelSelector");
+    select.innerHTML = `<option value="__all__">Alle modeller</option>`;
+    models2d.forEach(m => {
+      const opt = document.createElement("option");
+      opt.value = m.id; opt.textContent = m.name; select.appendChild(opt);
+    });
+    document.getElementById("modelCount").textContent = `${models2d.length} filer`;
+    fitView(modelBounds);
+  }
   let t = 0;
   const R = 15;
   demoTimer = setInterval(() => {
