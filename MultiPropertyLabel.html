@@ -2,920 +2,730 @@
 <html lang="nb">
 <head>
   <meta charset="UTF-8" />
-  <title>MultiPropertyLabel</title>
+  <title>Minimap – Trimble Connect</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <script src="https://components.connect.trimble.com/trimble-connect-workspace-api/index.js"></script>
-
   <style>
-    :root{
-      --primary:#0069d9; --danger:#e74c3c; --success:#28a745; --warn:#f59e0b;
-      --border:#e5e7eb; --bg:#f5f7fa; --card:#fff; --muted:#6b7280;
+    :root {
+      --primary: #0069d9;
+      --bg: #1a1f2e;
+      --panel: #222840;
+      --border: #2e3650;
+      --text: #e8eaf0;
+      --muted: #7b82a0;
+      --accent: #00d4ff;
+      --danger: #ff5252;
+      --success: #4caf50;
+      --grid: rgba(0, 212, 255, 0.06);
       font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
     }
-    body{margin:0;background:var(--bg);color:#111827;min-height:100vh;display:flex;flex-direction:column;}
-    header{display:flex;align-items:center;gap:14px;padding:12px 16px;background:#fff;border-bottom:1px solid var(--border);}
-    .logoWrap{
-      width:92px;height:92px;border:1px solid #eee;border-radius:12px;background:#fff;
-      display:flex;align-items:center;justify-content:center;overflow:hidden;
-      box-shadow:0 1px 3px rgba(15,23,42,.08);flex:0 0 auto;
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      user-select: none;
     }
-    .logoWrap img{width:84px;height:84px;object-fit:contain;display:block;}
-    .titleBlock{display:flex;flex-direction:column;gap:2px;}
-    .title{font-weight:900;font-size:18px;color:var(--primary);line-height:1.1;}
-    .org{font-size:13px;font-weight:700;color:#111827;line-height:1.1;}
-    .dev{font-size:12px;color:var(--muted);font-style:italic;line-height:1.1;}
-    .sub{font-size:12px;color:var(--muted);margin-top:2px;}
-    .status{margin-left:auto;font-size:12px;color:var(--muted);white-space:nowrap;}
 
-    main{padding:12px;display:grid;gap:12px;grid-template-columns:1fr;}
-    @media (min-width: 1100px){ main{grid-template-columns: 1.15fr .85fr; align-items:start;} }
-
-    .card{
-      background:var(--card);border:1px solid rgba(229,231,235,.7);border-radius:14px;
-      box-shadow:0 1px 3px rgba(15,23,42,.06);padding:12px;
+    /* ── Header ── */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 7px 10px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      flex: 0 0 auto;
+      gap: 8px;
     }
-    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
-    .row.space{justify-content:space-between;}
-    .muted{color:var(--muted);font-size:12px;}
-    #error{color:#b91c1c;font-size:12px;white-space:pre-wrap;margin-top:8px;min-height:14px;}
 
-    .grid3{display:grid;gap:10px;grid-template-columns:1fr;}
-    @media (min-width: 720px) and (max-width: 1099px){ .grid3{grid-template-columns:1fr 1fr 1fr;} }
+    .title-group {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
 
-    .psetBox{background:#fafafa;border:1px solid #eef2f7;border-radius:12px;padding:10px;}
-    .psetHead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;}
-    .psetHead b{font-size:13px;}
-    .tag{font-size:11px;color:var(--muted);background:#fff;border:1px solid #e5e7eb;padding:4px 8px;border-radius:999px;}
+    .title-group svg { opacity: .85; flex-shrink: 0; }
 
-    label{font-weight:800;font-size:12px;display:block;margin-top:8px;}
-    select,button{width:100%;padding:9px 10px;border-radius:10px;border:1px solid #d1d5db;background:#fff;font-size:13px;}
-    select:disabled{background:#f3f4f6;color:#9ca3af;}
-    button{border:none;color:#fff;font-weight:900;cursor:pointer;}
-    #scanBtn{background:var(--success);}
-    #csvBtn{background:var(--primary);}
-    #resetListBtn{background:var(--warn); color:#111827;}
-    #markBtn{background:var(--danger);}
-    button:disabled{opacity:.6;cursor:not-allowed;}
+    .title {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: .04em;
+      color: var(--accent);
+      text-transform: uppercase;
+    }
 
-    .colorRow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
-    .colorRow label{margin:0;font-weight:800;font-size:12px;}
-    .colorSelect{width:auto;min-width:160px;}
+    .status-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--muted);
+      transition: background .4s;
+      flex-shrink: 0;
+    }
+    .status-dot.live { background: var(--success); box-shadow: 0 0 6px var(--success); }
+    .status-dot.error { background: var(--danger); }
 
-    table{width:100%;border-collapse:collapse;font-size:12px;}
-    th,td{padding:8px;border-bottom:1px solid #eef2f7;text-align:left;vertical-align:top;}
-    th{background:#f8fafc;position:sticky;top:0;z-index:1;}
-    .mono{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;}
-    tr.clickable{cursor:pointer;}
-    tr.clickable:hover td{background:#eef6ff;}
-    .scroll{max-height:560px;overflow:auto;border:1px solid #eef2f7;border-radius:12px;margin-top:10px;}
-    .hint{margin-top:10px;line-height:1.5;}
-    .pill{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:999px;border:1px solid #e5e7eb;background:#fff;font-size:11px;color:var(--muted);}
-    .pill b{color:#111827;}
+    /* ── Map canvas area ── */
+    .map-wrap {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+
+    #mapCanvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: crosshair;
+    }
+
+    /* ── Bottom info bar ── */
+    .info-bar {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 0;
+      background: var(--panel);
+      border-top: 1px solid var(--border);
+      flex: 0 0 auto;
+    }
+
+    .info-cell {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 6px 8px;
+      border-right: 1px solid var(--border);
+    }
+    .info-cell:last-child { border-right: none; }
+
+    .info-label {
+      font-size: 9px;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+    }
+
+    .info-value {
+      font-size: 13px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      color: var(--accent);
+      margin-top: 1px;
+    }
+
+    /* ── Compass rose (top-right of map) ── */
+    #compass {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 48px;
+      height: 48px;
+      pointer-events: none;
+    }
+
+    /* ── Controls ── */
+    .controls {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .ctrl-btn {
+      width: 28px; height: 28px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      color: var(--text);
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background .15s, color .15s;
+    }
+    .ctrl-btn:hover { background: var(--primary); color: #fff; }
+
+    /* ── Level picker ── */
+    .level-badge {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 4px 10px;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    /* ── No-data overlay ── */
+    #overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(26, 31, 46, .85);
+      gap: 10px;
+      font-size: 12px;
+      color: var(--muted);
+      text-align: center;
+      padding: 20px;
+    }
+    #overlay.hidden { display: none; }
+
+    .spinner {
+      width: 24px; height: 24px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
-
 <body>
+
 <header>
-  <div class="logoWrap">
-    <img src="norconsult-logo-black.png"
-         alt="Norconsult"
-         onerror="this.style.display='none'; this.parentElement.textContent='Norconsult'; this.parentElement.style.fontWeight='900';">
+  <div class="title-group">
+    <!-- Map pin icon -->
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0118 0z"/>
+      <circle cx="12" cy="10" r="3"/>
+    </svg>
+    <span class="title">Minimap</span>
   </div>
-
-  <div class="titleBlock">
-    <div class="title">MultiPropertyLabel - VLB2A</div>
-    <div class="org">Norconsult Norge</div>
-    <div class="dev">Developed by Norconsult, (AI-assisted development). Kontaktperson: Edin.Dzakmic@norconsult.com</div>
-    <div class="sub">Velg Pset + properties → klikk objekter i 3D → påskrift + liste + CSV</div>
+  <div style="display:flex;align-items:center;gap:6px;">
+    <span id="statusText" style="font-size:11px;color:var(--muted);">Kobler til…</span>
+    <div class="status-dot" id="statusDot"></div>
   </div>
-
-  <div class="status" id="status">Kobler til Trimble Connect…</div>
 </header>
 
-<main>
-  <div class="card">
-    <div class="row space">
-      <div class="row" style="gap:8px;align-items:center;">
-        <span class="pill">Filtrer bort: <b>IFCPROJECT</b> / <b>IFCSITE</b> / <b>IFCBUILDING</b> / <b>IFCBUILDINGSTOREY</b></span>
-        <span class="pill">Klikk i 3D = <b>toggle</b> inn/ut av liste</span>
-        <span class="pill">Leaderline: <b>topp-senter → ut til høyre</b></span>
-      </div>
+<div class="map-wrap">
+  <canvas id="mapCanvas"></canvas>
 
-      <div class="row" style="gap:8px;align-items:center;">
-        <div class="colorRow">
-          <label for="colorSel">Farge:</label>
-          <select id="colorSel" class="colorSelect" disabled>
-            <option value="blue">Blå</option>
-            <option value="red">Rød</option>
-            <option value="green">Grønn</option>
-            <option value="yellow">Gul</option>
-          </select>
-        </div>
+  <!-- Compass -->
+  <svg id="compass" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="24" cy="24" r="22" fill="#1a1f2e" stroke="#2e3650" stroke-width="1.5"/>
+    <!-- N arrow -->
+    <polygon id="compassNeedle" points="24,5 27,24 24,20 21,24" fill="var(--accent)" opacity=".9"/>
+    <polygon id="compassNeedleS" points="24,43 21,24 24,28 27,24" fill="var(--muted)" opacity=".6"/>
+    <text x="24" y="14" text-anchor="middle" font-size="6" font-weight="900" fill="var(--accent)" font-family="system-ui">N</text>
+  </svg>
 
-        <button id="scanBtn" disabled style="width:auto;padding:10px 12px;">🔄 Oppdater liste</button>
-        <button id="csvBtn" disabled style="width:auto;padding:10px 12px;">📤 Eksporter CSV</button>
-        <button id="resetListBtn" disabled style="width:auto;padding:10px 12px;">🗑️ Tøm liste</button>
-        <button id="markBtn" disabled style="width:auto;padding:10px 12px;">⏸️ Stopp påskrift</button>
-      </div>
-    </div>
+  <!-- Level badge -->
+  <div class="level-badge" id="levelBadge">Etasje –</div>
 
-    <div id="error"></div>
-
-    <div class="grid3" style="margin-top:10px;">
-      <div class="psetBox">
-        <div class="psetHead"><b>Pset A</b><span class="tag">opptil 4 properties</span></div>
-        <label>Property Set</label>
-        <select id="psetA" disabled><option value="">(velg…)</option></select>
-        <label>Property 1</label><select id="a1" disabled><option value="">(velg…)</option></select>
-        <label>Property 2</label><select id="a2" disabled><option value="">(velg…)</option></select>
-        <label>Property 3</label><select id="a3" disabled><option value="">(velg…)</option></select>
-        <label>Property 4</label><select id="a4" disabled><option value="">(velg…)</option></select>
-      </div>
-
-      <div class="psetBox">
-        <div class="psetHead"><b>Pset B</b><span class="tag">opptil 4 properties</span></div>
-        <label>Property Set</label>
-        <select id="psetB" disabled><option value="">(velg…)</option></select>
-        <label>Property 1</label><select id="b1" disabled><option value="">(velg…)</option></select>
-        <label>Property 2</label><select id="b2" disabled><option value="">(velg…)</option></select>
-        <label>Property 3</label><select id="b3" disabled><option value="">(velg…)</option></select>
-        <label>Property 4</label><select id="b4" disabled><option value="">(velg…)</option></select>
-      </div>
-
-      <div class="psetBox">
-        <div class="psetHead"><b>Pset C</b><span class="tag">opptil 4 properties</span></div>
-        <label>Property Set</label>
-        <select id="psetC" disabled><option value="">(velg…)</option></select>
-        <label>Property 1</label><select id="c1" disabled><option value="">(velg…)</option></select>
-        <label>Property 2</label><select id="c2" disabled><option value="">(velg…)</option></select>
-        <label>Property 3</label><select id="c3" disabled><option value="">(velg…)</option></select>
-        <label>Property 4</label><select id="c4" disabled><option value="">(velg…)</option></select>
-      </div>
-    </div>
-
-    <div class="muted hint">
-      Tips: Slå på <b>Markups/Annotations</b> i viewer for å se tekst.<br>
-      NB: Markup API lar oss ikke styre font/size direkte, så vi løser lesbarhet via plassering/spredning.
-    </div>
+  <!-- Zoom controls -->
+  <div class="controls">
+    <button class="ctrl-btn" id="zoomIn" title="Zoom inn">+</button>
+    <button class="ctrl-btn" id="zoomOut" title="Zoom ut">−</button>
+    <button class="ctrl-btn" id="resetView" title="Sentrer">⊙</button>
   </div>
 
-  <div class="card">
-    <div class="row space">
-      <b>Valgte objekter (liste for eksport)</b>
-      <span class="muted" id="countInfo">0</span>
-    </div>
-
-    <div class="scroll">
-      <table>
-        <thead>
-          <tr>
-            <th style="width:52px;">#</th>
-            <th style="width:220px;">Objektnavn</th>
-            <th style="width:240px;">IfcGlobalId (GUID)</th>
-            <th>Påskrift</th>
-          </tr>
-        </thead>
-        <tbody id="tbody">
-          <tr><td colspan="4" class="muted">Klikk objekter i modellen for å legge dem i listen.</td></tr>
-        </tbody>
-      </table>
-    </div>
+  <!-- Waiting overlay -->
+  <div id="overlay">
+    <div class="spinner"></div>
+    <span>Venter på kameraposisjon<br>fra Trimble Connect…</span>
   </div>
-</main>
+</div>
+
+<div class="info-bar">
+  <div class="info-cell">
+    <span class="info-label">X (øst)</span>
+    <span class="info-value" id="valX">–</span>
+  </div>
+  <div class="info-cell">
+    <span class="info-label">Y (nord)</span>
+    <span class="info-value" id="valY">–</span>
+  </div>
+  <div class="info-cell">
+    <span class="info-label">Retning</span>
+    <span class="info-value" id="valDir">–°</span>
+  </div>
+</div>
 
 <script>
-  let API = null;
-  let availableProps = {};
-  const ifcGuidCache = new Map();
+// ─────────────────────────────────────────────
+//  State
+// ─────────────────────────────────────────────
+let API = null;
+let camPos   = { x: 0, y: 0, z: 0 };   // 3D world position
+let camDir   = { x: 0, y: 0, z: -1 };  // look-at direction vector
+let hasData  = false;
 
-  let lastMarkupIds = [];
-  const picked = new Map();
+// Map view
+let scale    = 1;      // pixels per model unit
+let offsetX  = 0;      // pan X (canvas px)
+let offsetY  = 0;      // pan Y (canvas px)
+let autoFit  = true;   // fit-to-view until user pans/zooms
 
-  const IGNORE_TYPES = new Set(["IFCPROJECT","IFCSITE","IFCBUILDING","IFCBUILDINGSTOREY"]);
+// Bounding box, updated over time
+let bbox = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
 
-  let lastSelectionSnapshot = "";
-  let lastProgrammaticSnapshot = "";
-  let selectionLockUntil = 0;
-  let selectionLockDepth = 0;
+// Trail
+const trail = [];
+const MAX_TRAIL = 200;
 
-  let refreshRunId = 0;
-  let camDebounce = null;
+// Canvas
+const canvas  = document.getElementById("mapCanvas");
+const ctx     = canvas.getContext("2d");
+const overlay = document.getElementById("overlay");
 
-  const COMPACT_DISTANCE_M = 120;
-  let markupsEnabled = true;
+// ─────────────────────────────────────────────
+//  Resize canvas
+// ─────────────────────────────────────────────
+function resize() {
+  canvas.width  = canvas.clientWidth;
+  canvas.height = canvas.clientHeight;
+  if (autoFit && hasData) fitView();
+  draw();
+}
+const ro = new ResizeObserver(resize);
+ro.observe(canvas);
 
-  // ===== NY PLASSERING (slik som blå pil i bildet) =====
-  // Start på topp-senter, end litt opp + til høyre (tekst utenfor objektet)
-  const START_GAP_Y_MM = 35;         // hvor langt over toppflaten ankret starter
-  const TEXT_OFFSET_X_MM = 900;      // hvor langt ut til siden teksten skal stå (+ høyre, - venstre)
-  const TEXT_OFFSET_Y_MM = 260;      // hvor langt opp fra toppflaten teksten står
-  const STACK_STEP_Y_MM = 220;       // ekstra "stabling" pr label for å unngå kryss/rot
-  // =====================================================
+// ─────────────────────────────────────────────
+//  Auto-fit
+// ─────────────────────────────────────────────
+function fitView() {
+  if (!hasData) return;
+  const pad = 60;
+  const W = canvas.width  - pad * 2;
+  const H = canvas.height - pad * 2;
+  const mW = bbox.maxX - bbox.minX || 10;
+  const mH = bbox.maxY - bbox.minY || 10;
+  scale = Math.min(W / mW, H / mH, 80);
+  offsetX = canvas.width  / 2 - (bbox.minX + mW / 2) * scale;
+  offsetY = canvas.height / 2 + (bbox.minY + mH / 2) * scale;
+}
 
-  const COLOR_MAP = {
-    blue:   { r: 0,   g: 0,   b: 204, a: 255 },
-    red:    { r: 220, g: 0,   b: 0,   a: 255 },
-    green:  { r: 0,   g: 160, b: 0,   a: 255 },
-    yellow: { r: 245, g: 180, b: 0,   a: 255 }
+// ─────────────────────────────────────────────
+//  World → canvas
+// ─────────────────────────────────────────────
+function toCanvas(wx, wy) {
+  return {
+    cx: wx * scale + offsetX,
+    cy: -wy * scale + offsetY  // flip Y (model Y=north → canvas Y=up)
   };
-  let selectedColorKey = "blue";
-  function currentMarkupColor(){ return COLOR_MAP[selectedColorKey] || COLOR_MAP.blue; }
+}
 
-  const els = {
-    status: document.getElementById("status"),
-    error: document.getElementById("error"),
-    scanBtn: document.getElementById("scanBtn"),
-    csvBtn: document.getElementById("csvBtn"),
-    resetListBtn: document.getElementById("resetListBtn"),
-    markBtn: document.getElementById("markBtn"),
-    colorSel: document.getElementById("colorSel"),
-    countInfo: document.getElementById("countInfo"),
-    tbody: document.getElementById("tbody"),
-    psetA: document.getElementById("psetA"),
-    psetB: document.getElementById("psetB"),
-    psetC: document.getElementById("psetC"),
-    a: [document.getElementById("a1"),document.getElementById("a2"),document.getElementById("a3"),document.getElementById("a4")],
-    b: [document.getElementById("b1"),document.getElementById("b2"),document.getElementById("b3"),document.getElementById("b4")],
-    c: [document.getElementById("c1"),document.getElementById("c2"),document.getElementById("c3"),document.getElementById("c4")]
+// ─────────────────────────────────────────────
+//  Draw
+// ─────────────────────────────────────────────
+function draw() {
+  const W = canvas.width;
+  const H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  // Background
+  ctx.fillStyle = "#12151f";
+  ctx.fillRect(0, 0, W, H);
+
+  // Grid
+  drawGrid(W, H);
+
+  if (!hasData) return;
+
+  // Trail
+  drawTrail();
+
+  // Camera position + FOV cone
+  const { cx: px, cy: py } = toCanvas(camPos.x, camPos.y);
+  drawFOV(px, py);
+  drawMarker(px, py);
+}
+
+function drawGrid(W, H) {
+  // Compute grid step: aim for ~40-80px spacing
+  const rawStep = 80 / scale;
+  const exp = Math.floor(Math.log10(rawStep));
+  const nice = [1, 2, 5, 10];
+  let gridStep = null;
+  for (const n of nice) {
+    const candidate = n * Math.pow(10, exp);
+    if (candidate * scale >= 40) { gridStep = candidate; break; }
+  }
+  if (!gridStep) gridStep = Math.pow(10, exp + 1);
+
+  ctx.strokeStyle = "rgba(0, 212, 255, 0.07)";
+  ctx.lineWidth = 1;
+
+  // Vertical lines
+  const startX = Math.floor((-offsetX / scale) / gridStep) * gridStep;
+  for (let wx = startX; wx < (W - offsetX) / scale; wx += gridStep) {
+    const cx = wx * scale + offsetX;
+    ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, H); ctx.stroke();
+  }
+  // Horizontal lines
+  const startY = Math.floor(((offsetY - H) / scale) / gridStep) * gridStep;
+  for (let wy = startY; wy < offsetY / scale; wy += gridStep) {
+    const cy = -wy * scale + offsetY;
+    ctx.beginPath(); ctx.moveTo(0, cy); ctx.lineTo(W, cy); ctx.stroke();
+  }
+
+  // Axis cross
+  const { cx: ox, cy: oy } = toCanvas(0, 0);
+  ctx.strokeStyle = "rgba(0, 212, 255, 0.18)";
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath(); ctx.moveTo(ox, 0); ctx.lineTo(ox, H); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(0, oy); ctx.lineTo(W, oy); ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+function drawTrail() {
+  if (trail.length < 2) return;
+  ctx.beginPath();
+  const p0 = toCanvas(trail[0].x, trail[0].y);
+  ctx.moveTo(p0.cx, p0.cy);
+  for (let i = 1; i < trail.length; i++) {
+    const p = toCanvas(trail[i].x, trail[i].y);
+    ctx.lineTo(p.cx, p.cy);
+  }
+  ctx.strokeStyle = "rgba(0, 212, 255, 0.3)";
+  ctx.lineWidth = 1.5;
+  ctx.lineJoin = "round";
+  ctx.stroke();
+}
+
+function drawFOV(px, py) {
+  // Heading in radians from direction vector (model: X=east, Y=north)
+  const heading = Math.atan2(camDir.x, camDir.y); // 0 = north
+
+  const fovAngle = Math.PI / 3;  // 60° FOV
+  const coneLen  = 60;
+
+  const leftAngle  = heading - fovAngle / 2;
+  const rightAngle = heading + fovAngle / 2;
+
+  // In canvas coords, north is up (Y flipped), so negate the heading Y component
+  const toCanvasAngle = (a) => {
+    return { dx: Math.sin(a), dy: -Math.cos(a) };
   };
 
-  function nowMs(){ return Date.now(); }
-  function lockSelectionFor(ms){ selectionLockUntil = Math.max(selectionLockUntil, nowMs() + ms); }
-  function isSelectionLocked(){ return selectionLockDepth > 0 || nowMs() < selectionLockUntil; }
+  const lv = toCanvasAngle(leftAngle);
+  const rv = toCanvasAngle(rightAngle);
 
-  async function withSelectionSuppressed(fn, msAfter = 350){
-    selectionLockDepth++;
-    try{ await fn(); }
-    finally{
-      selectionLockDepth = Math.max(0, selectionLockDepth - 1);
-      lockSelectionFor(msAfter);
-    }
-  }
+  ctx.beginPath();
+  ctx.moveTo(px, py);
+  ctx.lineTo(px + lv.dx * coneLen, py + lv.dy * coneLen);
+  ctx.arc(px, py, coneLen, Math.atan2(lv.dy, lv.dx), Math.atan2(rv.dy, rv.dx));
+  ctx.closePath();
 
-  function setStatus(msg){ els.status.textContent = msg; }
-  function setError(msg){ els.error.textContent = msg || ""; }
-  function norm(v){ return (v===null || v===undefined) ? "" : String(v).trim(); }
+  const grad = ctx.createRadialGradient(px, py, 0, px, py, coneLen);
+  grad.addColorStop(0, "rgba(0,212,255,0.35)");
+  grad.addColorStop(1, "rgba(0,212,255,0.0)");
+  ctx.fillStyle = grad;
+  ctx.fill();
 
-  function escHtml(s){
-    return String(s||"")
-      .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
-      .replace(/"/g,"&quot;").replace(/'/g,"&#039;");
-  }
+  // Boresight line
+  const bv = toCanvasAngle(heading);
+  ctx.beginPath();
+  ctx.moveTo(px, py);
+  ctx.lineTo(px + bv.dx * coneLen * 0.85, py + bv.dy * coneLen * 0.85);
+  ctx.strokeStyle = "rgba(0,212,255,0.7)";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+}
 
-  function escapeCSV(value){
-    if (value === null || value === undefined) return "";
-    const str = String(value);
-    if (/[;\n\r"]/.test(str)) return '"' + str.replace(/"/g,'""') + '"';
-    return str;
-  }
+function drawMarker(px, py) {
+  // Outer ring
+  ctx.beginPath();
+  ctx.arc(px, py, 9, 0, Math.PI * 2);
+  ctx.strokeStyle = "rgba(0,212,255,0.5)";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
 
-  function updateMarkupButton(){
-    if (markupsEnabled){
-      els.markBtn.textContent = "⏸️ Stopp påskrift";
-      els.markBtn.style.background = "var(--danger)";
-    }else{
-      els.markBtn.textContent = "▶️ Start påskrift";
-      els.markBtn.style.background = "var(--success)";
-    }
-  }
+  // Inner dot
+  ctx.beginPath();
+  ctx.arc(px, py, 5, 0, Math.PI * 2);
+  ctx.fillStyle = "#00d4ff";
+  ctx.fill();
 
-  function psetNameOf(ps){ return norm(ps?.name || ps?.set || ""); }
+  // Pulse ring (simple static glow)
+  ctx.beginPath();
+  ctx.arc(px, py, 13, 0, Math.PI * 2);
+  ctx.strokeStyle = "rgba(0,212,255,0.15)";
+  ctx.lineWidth = 3;
+  ctx.stroke();
+}
 
-  function getIfcType(objProps){
-    const direct = norm(objProps?.ifcType || objProps?.ifcEntity || objProps?.entityType || objProps?.type);
-    return direct ? direct.toUpperCase() : "";
-  }
+// ─────────────────────────────────────────────
+//  Compass
+// ─────────────────────────────────────────────
+function updateCompass() {
+  // Heading angle from north, in degrees
+  const heading = Math.atan2(camDir.x, camDir.y) * (180 / Math.PI);
+  const needle  = document.getElementById("compassNeedle");
+  const needleS = document.getElementById("compassNeedleS");
+  // Rotate so needle points toward current heading
+  needle.setAttribute("transform",  `rotate(${heading}, 24, 24)`);
+  needleS.setAttribute("transform", `rotate(${heading}, 24, 24)`);
+}
 
-  function isIgnored(objProps){
-    const t = getIfcType(objProps);
-    if (t && IGNORE_TYPES.has(t)) return true;
-    const n = norm(objProps?.name || objProps?.objectName).toUpperCase();
-    for (const it of IGNORE_TYPES){
-      if (n === it || n.includes(it)) return true;
-    }
-    return false;
-  }
+// ─────────────────────────────────────────────
+//  Info bar
+// ─────────────────────────────────────────────
+function updateInfo() {
+  document.getElementById("valX").textContent = camPos.x.toFixed(1);
+  document.getElementById("valY").textContent = camPos.y.toFixed(1);
 
-  function guessObjectName(objProps){
-    const direct = norm(objProps?.name || objProps?.objectName || objProps?.displayName);
-    if (direct) return direct;
+  const deg = ((Math.atan2(camDir.x, camDir.y) * 180 / Math.PI) + 360) % 360;
+  document.getElementById("valDir").textContent = deg.toFixed(0) + "°";
 
-    for (const ps of (objProps?.properties || [])){
-      for (const p of (ps.properties || [])){
-        const pn = norm(p.name).toLowerCase();
-        if (pn === "objektnavn" || pn.includes("objektnavn") || pn === "name"){
-          const v = norm(p.value);
-          if (v) return v;
-        }
-      }
-    }
-    return "";
-  }
+  // Cardinal
+  const cardinals = ["N","NØ","Ø","SØ","S","SV","V","NV"];
+  const idx = Math.round(deg / 45) % 8;
+  document.getElementById("valDir").title = cardinals[idx];
+}
 
-  async function getIfcGuid(modelId, runtimeId){
-    const key = `${modelId}:${runtimeId}`;
-    if (ifcGuidCache.has(key)) return ifcGuidCache.get(key);
+// ─────────────────────────────────────────────
+//  Apply new camera data
+// ─────────────────────────────────────────────
+function onCameraUpdate(position, direction) {
+  if (!position) return;
 
-    let v = "";
-    try{
-      const ids = await API.viewer.convertToObjectIds(modelId, [Number(runtimeId)]);
-      v = (ids && ids[0]) ? String(ids[0]) : "";
-    }catch(e){ v=""; }
+  camPos = {
+    x: position.x ?? 0,
+    y: position.y ?? 0,
+    z: position.z ?? 0
+  };
 
-    ifcGuidCache.set(key, v);
-    return v;
-  }
-
-  function resetPropSelects(list){
-    for (const sel of list){
-      sel.innerHTML = '<option value="">(velg…)</option>';
-      sel.disabled = true;
-    }
-  }
-
-  function fillPsetSelect(sel, psetNames){
-    sel.innerHTML = '<option value="">(velg…)</option>';
-    for (const n of psetNames){
-      const opt = document.createElement("option");
-      opt.value = n;
-      opt.textContent = n;
-      sel.appendChild(opt);
-    }
-    sel.disabled = false;
-  }
-
-  function fillPropSelects(propSelects, props){
-    for (const sel of propSelects){
-      sel.innerHTML = '<option value="">(velg…)</option>';
-      for (const p of props){
-        const opt = document.createElement("option");
-        opt.value = p;
-        opt.textContent = p;
-        sel.appendChild(opt);
-      }
-      sel.disabled = false;
-    }
-  }
-
-  function onPsetChanged(psetSel, propSelects){
-    resetPropSelects(propSelects);
-    const pset = norm(psetSel.value);
-    if (!pset) return;
-
-    const props = Array.from(availableProps[pset] || []).sort((a,b)=>a.localeCompare(b,"nb"));
-    fillPropSelects(propSelects, props);
-    refreshFromPicked();
-  }
-
-  function getConfig(){
-    const blocks = [
-      { key:"A", pset: norm(els.psetA.value), props: els.a.map(s => norm(s.value)).filter(Boolean) },
-      { key:"B", pset: norm(els.psetB.value), props: els.b.map(s => norm(s.value)).filter(Boolean) },
-      { key:"C", pset: norm(els.psetC.value), props: els.c.map(s => norm(s.value)).filter(Boolean) }
-    ];
-
-    const out = [];
-    for (const b of blocks){
-      if (!b.pset || !b.props.length) continue;
-      const seen = new Set();
-      const props = [];
-      for (const p of b.props){
-        if (seen.has(p)) continue;
-        seen.add(p);
-        props.push(p);
-      }
-      out.push({ key: b.key, pset: b.pset, props });
-    }
-    return out;
-  }
-
-  function findValue(objProps, psetName, propName){
-    for (const ps of (objProps?.properties || [])){
-      if (psetNameOf(ps) !== psetName) continue;
-      for (const p of (ps.properties || [])){
-        if (norm(p.name) === propName) return p.value;
-      }
-    }
-    return undefined;
-  }
-
-  function buildFullText(config, objProps){
-    const lines = [];
-    for (const block of config){
-      const hasPset = (objProps.properties || []).some(x => psetNameOf(x) === block.pset);
-      if (!hasPset) continue;
-
-      for (const prop of block.props){
-        const v = findValue(objProps, block.pset, prop);
-        const vs = norm(v);
-        if (vs) lines.push(vs);
-      }
-    }
-    return lines.join("\n");
-  }
-
-  function buildCompactText(config, objProps){
-    const lines = [];
-    for (const block of config){
-      const hasPset = (objProps.properties || []).some(x => psetNameOf(x) === block.pset);
-      if (!hasPset) continue;
-
-      for (const prop of block.props){
-        const v = findValue(objProps, block.pset, prop);
-        const vs = norm(v);
-        if (vs){
-          lines.push(vs);
-          break;
-        }
-      }
-    }
-    return lines.slice(0, 4).join("\n");
-  }
-
-  async function getCameraDistanceMeters(){
-    try{
-      if (!API?.viewer?.getCamera) return null;
-      const cam = await API.viewer.getCamera();
-      if (!cam) return null;
-
-      const pos = cam.position || cam.eye || cam.cameraPosition;
-      const tgt = cam.target || cam.lookAt || cam.cameraTarget;
-      if (!pos || !tgt) return null;
-
-      const dx = (pos.x - tgt.x), dy = (pos.y - tgt.y), dz = (pos.z - tgt.z);
-      const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
-      return Number.isFinite(dist) ? dist : null;
-    }catch(e){ return null; }
-  }
-
-  async function isZoomedOut(){
-    const dist = await getCameraDistanceMeters();
-    if (!dist || !Number.isFinite(dist)) return true;
-    return dist > COMPACT_DISTANCE_M;
-  }
-
-  function scheduleRebuildMarkupsOnly(){
-    if (!markupsEnabled) return;
-    if (camDebounce) clearTimeout(camDebounce);
-    camDebounce = setTimeout(async () => { await rebuildMarkupsOnly(); }, 220);
-  }
-
-  async function clearMarkups(){
-    try{
-      if (!API?.markup) return;
-      if (typeof API.markup.removeAllMarkups === "function"){
-        await API.markup.removeAllMarkups();
-      }else if (typeof API.markup.removeMarkups === "function" && lastMarkupIds.length){
-        await API.markup.removeMarkups(lastMarkupIds.slice());
-      }
-    }catch(e){
-      console.warn("Fjerning av markups feilet:", e);
-    }finally{
-      lastMarkupIds = [];
-    }
-  }
-
-  // Stabling for ryddig (samme retning, ingen kryss)
-  function stackOffsetMm(index){
-    return { dy: index * STACK_STEP_Y_MM };
-  }
-
-  // ✅ Ny plassering: topp-senter -> tekst utenfor (høyre) nær topp
-  async function addTextMarkupOverObject(modelId, runtimeId, text, indexForStack){
-    if (!API?.markup?.addTextMarkup) throw new Error("MarkupAPI ikke tilgjengelig (addTextMarkup).");
-
-    const boxes = await API.viewer.getObjectBoundingBoxes(modelId, [runtimeId]);
-    if (!boxes || !boxes.length || !boxes[0]?.boundingBox) return null;
-
-    const bb = boxes[0].boundingBox;
-    const min = bb.min, max = bb.max;
-
-    const cx_mm = ((min.x + max.x) / 2) * 1000;
-    const cz_mm = ((min.z + max.z) / 2) * 1000;
-    const topY_mm = (max.y) * 1000;
-
-    const st = stackOffsetMm(indexForStack || 0);
-    const color = currentMarkupColor();
-
-    // Start: tett på topp-senter (anker)
-    const start = {
-      positionX: cx_mm,
-      positionY: topY_mm + START_GAP_Y_MM,
-      positionZ: cz_mm,
-      modelId, objectId: runtimeId
+  if (direction) {
+    camDir = {
+      x: direction.x ?? 0,
+      y: direction.y ?? 0,
+      z: direction.z ?? -1
     };
-
-    // End: litt opp + til siden (tekst utenfor objektet)
-    const end = {
-      positionX: cx_mm + TEXT_OFFSET_X_MM,
-      positionY: topY_mm + TEXT_OFFSET_Y_MM + st.dy,
-      positionZ: cz_mm,
-      modelId, objectId: runtimeId
-    };
-
-    const created = await API.markup.addTextMarkup([{
-      start, end, text,
-      color
-    }]);
-
-    if (created && created.length && typeof created[0].id === "number") return created[0].id;
-    return null;
+    // Normalise
+    const len = Math.sqrt(camDir.x**2 + camDir.y**2 + camDir.z**2) || 1;
+    camDir.x /= len; camDir.y /= len; camDir.z /= len;
   }
 
-  function selectionToSnapshot(sel){
-    const parts = [];
-    for (const s of (sel||[])){
-      const ids = (s.objectRuntimeIds||[]).slice().sort((a,b)=>a-b);
-      parts.push(`${s.modelId}:${ids.join(",")}`);
-    }
-    return parts.sort().join("|");
+  // Update bbox
+  if (camPos.x < bbox.minX) bbox.minX = camPos.x;
+  if (camPos.x > bbox.maxX) bbox.maxX = camPos.x;
+  if (camPos.y < bbox.minY) bbox.minY = camPos.y;
+  if (camPos.y > bbox.maxY) bbox.maxY = camPos.y;
+
+  // Trail
+  trail.push({ x: camPos.x, y: camPos.y });
+  if (trail.length > MAX_TRAIL) trail.shift();
+
+  // Level badge (use Z if meaningful)
+  const floorZ = Math.round(camPos.z);
+  document.getElementById("levelBadge").textContent = `Z: ${floorZ.toFixed(1)} m`;
+
+  if (!hasData) {
+    hasData = true;
+    overlay.classList.add("hidden");
+    fitView();
   }
 
-  async function setViewerSelectionSafeSingle(modelId, runtimeId, msAfter=450){
-    const modelObjectIds = [{ modelId, objectRuntimeIds: [Number(runtimeId)] }];
-    lastProgrammaticSnapshot = selectionToSnapshot(modelObjectIds.map(x => ({
-      modelId: x.modelId, objectRuntimeIds: x.objectRuntimeIds
-    })));
+  if (autoFit) fitView();
+  updateInfo();
+  updateCompass();
+  draw();
 
-    await withSelectionSuppressed(async () => {
-      try{ await API.viewer.setSelection({ modelObjectIds }, "replace"); }catch{}
-    }, msAfter);
+  // Status
+  setStatus("live", "Live");
+}
+
+// ─────────────────────────────────────────────
+//  Status helper
+// ─────────────────────────────────────────────
+function setStatus(type, text) {
+  const dot  = document.getElementById("statusDot");
+  const span = document.getElementById("statusText");
+  dot.className  = "status-dot" + (type ? " " + type : "");
+  span.textContent = text;
+}
+
+// ─────────────────────────────────────────────
+//  Pan & zoom
+// ─────────────────────────────────────────────
+let dragging = false, dragX0 = 0, dragY0 = 0, off0X = 0, off0Y = 0;
+
+canvas.addEventListener("mousedown", e => {
+  dragging = true; autoFit = false;
+  dragX0 = e.clientX; dragY0 = e.clientY;
+  off0X = offsetX; off0Y = offsetY;
+});
+window.addEventListener("mousemove", e => {
+  if (!dragging) return;
+  offsetX = off0X + (e.clientX - dragX0);
+  offsetY = off0Y + (e.clientY - dragY0);
+  draw();
+});
+window.addEventListener("mouseup", () => { dragging = false; });
+
+canvas.addEventListener("wheel", e => {
+  e.preventDefault();
+  autoFit = false;
+  const factor = e.deltaY < 0 ? 1.15 : 0.87;
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  offsetX = mx + (offsetX - mx) * factor;
+  offsetY = my + (offsetY - my) * factor;
+  scale *= factor;
+  draw();
+}, { passive: false });
+
+// Touch
+let lastTouchDist = null;
+canvas.addEventListener("touchstart", e => {
+  if (e.touches.length === 1) {
+    dragging = true; autoFit = false;
+    dragX0 = e.touches[0].clientX; dragY0 = e.touches[0].clientY;
+    off0X = offsetX; off0Y = offsetY;
   }
-
-  function updateButtonsAndTableEmpty(){
-    els.countInfo.textContent = String(picked.size);
-    els.csvBtn.disabled = picked.size === 0;
-    els.resetListBtn.disabled = picked.size === 0;
-
-    if (picked.size === 0){
-      els.tbody.innerHTML = `<tr><td colspan="4" class="muted">Klikk objekter i modellen for å legge dem i listen.</td></tr>`;
-    }
+  if (e.touches.length === 2) {
+    dragging = false;
+    lastTouchDist = Math.hypot(
+      e.touches[0].clientX - e.touches[1].clientX,
+      e.touches[0].clientY - e.touches[1].clientY
+    );
   }
+}, { passive: true });
+canvas.addEventListener("touchmove", e => {
+  if (e.touches.length === 1 && dragging) {
+    offsetX = off0X + (e.touches[0].clientX - dragX0);
+    offsetY = off0Y + (e.touches[0].clientY - dragY0);
+    draw();
+  }
+  if (e.touches.length === 2 && lastTouchDist !== null) {
+    const d = Math.hypot(
+      e.touches[0].clientX - e.touches[1].clientX,
+      e.touches[0].clientY - e.touches[1].clientY
+    );
+    const factor = d / lastTouchDist;
+    lastTouchDist = d;
+    scale *= factor;
+    draw();
+  }
+}, { passive: true });
+canvas.addEventListener("touchend", () => { dragging = false; lastTouchDist = null; });
 
-  async function rebuildMarkupsOnly(){
-    if (!markupsEnabled){
-      await clearMarkups();
-      return;
-    }
+document.getElementById("zoomIn").addEventListener("click",  () => { autoFit = false; scale *= 1.3; draw(); });
+document.getElementById("zoomOut").addEventListener("click", () => { autoFit = false; scale /= 1.3; draw(); });
+document.getElementById("resetView").addEventListener("click", () => {
+  autoFit = true;
+  if (hasData) fitView();
+  draw();
+});
 
-    if (!picked.size){
-      await clearMarkups();
-      updateButtonsAndTableEmpty();
-      return;
-    }
+// ─────────────────────────────────────────────
+//  Trimble Connect init
+// ─────────────────────────────────────────────
+async function init() {
+  setStatus("", "Kobler til…");
 
-    const myRun = ++refreshRunId;
+  try {
+    API = await TrimbleConnectWorkspace.connect(window.parent, async (event, args) => {
+      // Camera events – try common event names
+      if (
+        event === "viewer.camera" ||
+        event === "viewer.cameraChanged" ||
+        event === "camera.changed" ||
+        event === "extension.camera"
+      ) {
+        const d = args?.data ?? args;
+        const pos = d?.position ?? d?.eye ?? d?.cameraPosition;
+        const dir = d?.direction ?? d?.lookAt ?? d?.target
+          ? vectorFromTo(d.eye ?? d.position, d.target ?? d.lookAt)
+          : d?.direction;
 
-    try{
-      const zoomedOut = await isZoomedOut();
-
-      await clearMarkups();
-      if (myRun !== refreshRunId) return;
-
-      // Stabil rekkefølge gir stabil stacking
-      const items = Array.from(picked.values()).slice().sort((a,b) => {
-        const am = String(a.modelId), bm = String(b.modelId);
-        if (am !== bm) return am.localeCompare(bm);
-        return Number(a.runtimeId) - Number(b.runtimeId);
-      });
-
-      let made = 0;
-      for (let idx=0; idx<items.length; idx++){
-        if (myRun !== refreshRunId) return;
-        const it = items[idx];
-
-        const text = zoomedOut ? (it.compactText || it.fullText || "") : (it.fullText || "");
-        if (!norm(text)) continue;
-
-        const mid = await addTextMarkupOverObject(it.modelId, Number(it.runtimeId), text, idx);
-        if (mid != null){ lastMarkupIds.push(mid); made++; }
+        onCameraUpdate(pos, dir);
       }
+    });
 
-      setStatus(zoomedOut ? `Zoom ut: kortere tekst. Påskrifter: ${made}.` : `Zoom inn: full tekst. Påskrifter: ${made}.`);
-    }catch(e){
-      console.error(e);
-      setError("Klarte ikke å bygge om påskrifter: " + (e.message || e));
-    }
-  }
-
-  async function refreshFromPicked(){
-    const myRun = ++refreshRunId;
-
-    try{
-      setError("");
-      const config = getConfig();
-      if (!config.length){
-        setStatus("Velg minst ett Property Set og minst én property. Deretter klikk objekter i 3D.");
-        return;
+    // Try to get current camera state immediately
+    try {
+      const cam = await API.viewer?.getCamera?.();
+      if (cam) {
+        const pos = cam.position ?? cam.eye;
+        const dir = cam.direction ?? (cam.target ? vectorFromTo(cam.eye ?? cam.position, cam.target) : null);
+        onCameraUpdate(pos, dir);
       }
+    } catch (_) { /* API may not support getCamera */ }
 
-      if (!picked.size){
-        await clearMarkups();
-        updateButtonsAndTableEmpty();
-        setStatus("Ingen objekt i listen.");
-        return;
-      }
+    // Request camera updates / subscribe
+    try { await API.viewer?.subscribeToCamera?.(); } catch (_) {}
+    try { await API.viewer?.enableCameraEvents?.(); } catch (_) {}
 
-      setStatus(`Oppdaterer ${picked.size} objekter…`);
+    setStatus("live", "Tilkoblet");
+    startDemoIfNoData();
 
-      const perModel = new Map();
-      for (const it of picked.values()){
-        if (!perModel.has(it.modelId)) perModel.set(it.modelId, []);
-        perModel.get(it.modelId).push(Number(it.runtimeId));
-      }
-
-      for (const [modelId, rids] of perModel.entries()){
-        if (myRun !== refreshRunId) return;
-
-        const propsArr = await API.viewer.getObjectProperties(modelId, rids);
-        if (myRun !== refreshRunId) return;
-
-        for (let i=0;i<rids.length;i++){
-          const rid = rids[i];
-          const objProps = propsArr?.[i];
-          if (!objProps) continue;
-          if (isIgnored(objProps)) continue;
-
-          const name = guessObjectName(objProps);
-          const guid = await getIfcGuid(modelId, rid);
-
-          const fullText = buildFullText(config, objProps);
-          const compactText = buildCompactText(config, objProps);
-
-          const key = `${modelId}:${rid}`;
-          const store = picked.get(key);
-          if (store){
-            store.name = name;
-            store.guid = guid;
-            store.fullText = fullText;
-            store.compactText = compactText;
-          }
-        }
-      }
-
-      if (myRun !== refreshRunId) return;
-
-      const rows = [];
-      let idx = 1;
-      for (const it of picked.values()){
-        rows.push(`
-          <tr class="clickable" data-m="${escHtml(it.modelId)}" data-r="${escHtml(it.runtimeId)}">
-            <td>${idx++}</td>
-            <td>${escHtml(it.name || "")}</td>
-            <td class="mono">${escHtml(it.guid || "")}</td>
-            <td style="white-space:pre-wrap;">${escHtml(it.fullText || "")}</td>
-          </tr>
-        `);
-      }
-      els.tbody.innerHTML = rows.join("") || `<tr><td colspan="4" class="muted">Ingen påskrift ble laget (mangler verdier / filtrert bort).</td></tr>`;
-      els.countInfo.textContent = String(picked.size);
-
-      els.tbody.querySelectorAll("tr.clickable").forEach(tr => {
-        tr.addEventListener("click", async () => {
-          const modelId = tr.getAttribute("data-m");
-          const rid = tr.getAttribute("data-r");
-          await setViewerSelectionSafeSingle(modelId, rid, 250);
-          try{ await API.viewer.setCamera({ modelObjectIds: [{ modelId, objectRuntimeIds: [Number(rid)] }] }, { animationTime: 650 }); }catch{}
-        });
-      });
-
-      await rebuildMarkupsOnly();
-
-      els.csvBtn.disabled = picked.size === 0;
-      els.resetListBtn.disabled = picked.size === 0;
-    }catch(e){
-      console.error(e);
-      if (myRun === refreshRunId){
-        setError("Oppdateringsfeil: " + (e.message || e));
-        setStatus("Kunne ikke oppdatere påskrifter.");
-      }
-    }
+  } catch (err) {
+    console.error("Trimble Connect feil:", err);
+    setStatus("error", "Frakoblet – demo");
+    startDemo();
   }
+}
 
-  async function exportCSV(){
-    if (!picked.size){ setError("Ingen objekter i listen å eksportere."); return; }
-    await refreshFromPicked();
+// ─────────────────────────────────────────────
+//  Helper: direction vector from two points
+// ─────────────────────────────────────────────
+function vectorFromTo(from, to) {
+  if (!from || !to) return null;
+  return {
+    x: (to.x ?? 0) - (from.x ?? 0),
+    y: (to.y ?? 0) - (from.y ?? 0),
+    z: (to.z ?? 0) - (from.z ?? 0)
+  };
+}
 
-    const config = getConfig();
-    const configText = config.map(b => `${b.pset} -> ${b.props.join(", ")}`).join(" | ");
+// ─────────────────────────────────────────────
+//  Demo mode: animate a camera walking around
+// ─────────────────────────────────────────────
+let demoTimer = null;
 
-    const header = ["#", "ModelId", "RuntimeId", "ObjectName", "IfcGlobalId", "Config", "LabelTextFull", "LabelTextCompact"];
-    const rows = [header.join(";")];
-
-    let i = 1;
-    for (const it of picked.values()){
-      rows.push([
-        i++,
-        it.modelId || "",
-        it.runtimeId || "",
-        it.name || "",
-        it.guid || "",
-        configText,
-        (it.fullText || "").replace(/\r?\n/g, "\\n"),
-        (it.compactText || "").replace(/\r?\n/g, "\\n")
-      ].map(escapeCSV).join(";"));
+function startDemoIfNoData() {
+  // If no real data after 3 s, start demo
+  setTimeout(() => {
+    if (!hasData) {
+      setStatus("", "Demo-modus");
+      startDemo();
     }
+  }, 3000);
+}
 
-    const csvContent = rows.join("\r\n");
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
+function startDemo() {
+  let t = 0;
+  const R = 15;
+  demoTimer = setInterval(() => {
+    t += 0.03;
+    // Walk in a figure-8
+    const x = R * Math.sin(t);
+    const y = R * Math.sin(t * 2) / 2;
+    const z = 3 + Math.sin(t * 0.5);
 
-    const link = document.createElement("a");
-    const dateStr = new Date().toISOString().slice(0,10);
-    link.href = url;
-    link.download = `TC_MultiPropertyLabel_ValgteObjekter_${dateStr}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    // Direction tangent
+    const dx = R * Math.cos(t);
+    const dy = R * Math.cos(t * 2);
+    const len = Math.sqrt(dx**2 + dy**2) || 1;
 
-    setStatus(`📤 Eksporterte ${picked.size} objekter til CSV.`);
-    setError("");
-  }
+    onCameraUpdate({ x, y, z }, { x: dx/len, y: dy/len, z: 0 });
+  }, 100);
+}
 
-  async function resetPickedList(){
-    setError("");
-    refreshRunId++;
-    lockSelectionFor(1200);
-
-    await clearMarkups();
-    picked.clear();
-    updateButtonsAndTableEmpty();
-
-    lastSelectionSnapshot = "";
-    lastProgrammaticSnapshot = "";
-
-    await withSelectionSuppressed(async () => {
-      try{ await API.viewer.setSelection({ modelObjectIds: [] }, "replace"); }catch{}
-    }, 900);
-
-    setStatus("🗑️ Listen er tømt (tabell + selection + påskrift).");
-  }
-
-  function getLastSelectedFromSelection(selection){
-    if (!selection || !selection.length) return null;
-    for (let i = selection.length - 1; i >= 0; i--){
-      const s = selection[i];
-      const ids = (s?.objectRuntimeIds || []);
-      if (s?.modelId && ids.length){
-        const rid = ids[ids.length - 1];
-        return { modelId: s.modelId, runtimeId: rid };
-      }
-    }
-    return null;
-  }
-
-  async function handleSelectionChanged(selection){
-    if (isSelectionLocked()) return;
-
-    const snap = selectionToSnapshot(selection);
-    if (snap && snap === lastProgrammaticSnapshot){
-      lastSelectionSnapshot = snap;
-      return;
-    }
-    if (snap === lastSelectionSnapshot) return;
-    lastSelectionSnapshot = snap;
-
-    const last = getLastSelectedFromSelection(selection);
-    if (!last) return;
-
-    const key = `${last.modelId}:${last.runtimeId}`;
-    if (picked.has(key)) picked.delete(key);
-    else picked.set(key, { modelId: last.modelId, runtimeId: last.runtimeId });
-
-    await setViewerSelectionSafeSingle(last.modelId, last.runtimeId, 250);
-    await refreshFromPicked();
-  }
-
-  async function scanPsets(){
-    try{
-      setError("");
-      setStatus("Skanner modell for Property Sets…");
-
-      availableProps = {};
-      resetPropSelects(els.a); resetPropSelects(els.b); resetPropSelects(els.c);
-      [els.psetA, els.psetB, els.psetC].forEach(s => { s.innerHTML = '<option value="">(velg…)</option>'; s.disabled = true; });
-
-      const models = await API.viewer.getObjects();
-      if (!models || !models.length){ setStatus("Fant ingen modeller/objekter i viewer."); return; }
-
-      for (const m of models){
-        const modelId = m.modelId || m.modelid || m["model Id"];
-        const objs = m.objects || [];
-        if (!modelId || !objs.length) continue;
-
-        const ids = objs.slice(0, 1500).map(o => o.id);
-        const propsArr = await API.viewer.getObjectProperties(modelId, ids);
-
-        for (const objProps of (propsArr || [])){
-          if (!objProps) continue;
-          if (isIgnored(objProps)) continue;
-
-          for (const ps of (objProps.properties || [])){
-            const psetName = psetNameOf(ps);
-            if (!psetName) continue;
-
-            if (!availableProps[psetName]) availableProps[psetName] = new Set();
-            for (const p of (ps.properties || [])){
-              const pn = norm(p.name);
-              if (pn) availableProps[psetName].add(pn);
-            }
-          }
-        }
-      }
-
-      const psetNames = Object.keys(availableProps).sort((a,b)=>a.localeCompare(b,"nb"));
-      if (!psetNames.length){ setStatus("Fant ingen Property Sets (etter filtrering)."); return; }
-
-      fillPsetSelect(els.psetA, psetNames);
-      fillPsetSelect(els.psetB, psetNames);
-      fillPsetSelect(els.psetC, psetNames);
-
-      setStatus("Ferdig skannet. Velg Pset/properties og klikk objekter i 3D.");
-    }catch(e){
-      console.error(e);
-      setError("Skann-feil: " + (e.message || e));
-      setStatus("Kunne ikke skanne.");
-    }
-  }
-
-  function onWorkspaceEvent(event, payload){
-    const ev = (event || "").toLowerCase();
-
-    if (ev.includes("selection")){
-      const sel = (payload && payload.data) ? payload.data : [];
-      handleSelectionChanged(sel);
-      return;
-    }
-
-    if (ev.includes("camera")){
-      scheduleRebuildMarkupsOnly();
-      return;
-    }
-  }
-
-  async function connect(){
-    try{
-      API = await TrimbleConnectWorkspace.connect(window.parent, onWorkspaceEvent, 30000);
-
-      els.scanBtn.disabled = false;
-      els.markBtn.disabled = false;
-      els.colorSel.disabled = false;
-
-      selectedColorKey = els.colorSel.value || "blue";
-      updateMarkupButton();
-
-      setStatus("✅ Tilkoblet. Trykk «Oppdater liste» for å fylle Pset/Property.");
-
-      setInterval(async () => {
-        if (!markupsEnabled) return;
-        if (!picked.size) return;
-        scheduleRebuildMarkupsOnly();
-      }, 1200);
-    }catch(e){
-      console.error(e);
-      setError("Kunne ikke koble til Trimble Connect: " + (e.message || e));
-      setStatus("❌ Feil ved tilkobling.");
-    }
-  }
-
-  // UI wiring
-  els.scanBtn.addEventListener("click", scanPsets);
-  els.csvBtn.addEventListener("click", exportCSV);
-  els.resetListBtn.addEventListener("click", resetPickedList);
-
-  els.markBtn.addEventListener("click", async () => {
-    markupsEnabled = !markupsEnabled;
-    updateMarkupButton();
-
-    if (!markupsEnabled){
-      await clearMarkups();
-      setStatus("⏸️ Påskrift stoppet og fjernet. (Start igjen med knappen.)");
-    }else{
-      setStatus("▶️ Påskrift aktivert.");
-      await rebuildMarkupsOnly();
-    }
-  });
-
-  els.colorSel.addEventListener("change", async () => {
-    selectedColorKey = els.colorSel.value || "blue";
-    if (markupsEnabled){
-      await rebuildMarkupsOnly();
-      setStatus(`🎨 Farge endret til: ${els.colorSel.options[els.colorSel.selectedIndex].text}`);
-    }else{
-      setStatus(`🎨 Farge valgt: ${els.colorSel.options[els.colorSel.selectedIndex].text} (start påskrift for å vise).`);
-    }
-  });
-
-  els.psetA.addEventListener("change", () => onPsetChanged(els.psetA, els.a));
-  els.psetB.addEventListener("change", () => onPsetChanged(els.psetB, els.b));
-  els.psetC.addEventListener("change", () => onPsetChanged(els.psetC, els.c));
-  [...els.a, ...els.b, ...els.c].forEach(sel => sel.addEventListener("change", refreshFromPicked));
-
-  connect();
+// ─────────────────────────────────────────────
+//  Boot
+// ─────────────────────────────────────────────
+resize();
+draw();
+init();
 </script>
 </body>
 </html>
-
-
-
