@@ -53,6 +53,8 @@ const canvas=document.getElementById('mapCanvas'), ctx=canvas.getContext('2d'), 
 
 function setStatus(type,text){document.getElementById('statusDot').className='status-dot'+(type?' '+type:'');document.getElementById('statusText').textContent=text;}
 function validBounds(b){return b&&isFinite(b.minX)&&isFinite(b.maxX)&&isFinite(b.minY)&&isFinite(b.maxY)&&b.maxX>b.minX&&b.maxY>b.minY;}
+function boundsFromList(list){const out={minX:Infinity,maxX:-Infinity,minY:Infinity,maxY:-Infinity};for(const b of list||[])mergeBounds(out,b);return validBounds(out)?out:null;}
+function inflateBounds(b,margin=0.08){if(!validBounds(b))return b;const w=b.maxX-b.minX,h=b.maxY-b.minY,p=Math.max(w,h)*margin||10;return{minX:b.minX-p,maxX:b.maxX+p,minY:b.minY-p,maxY:b.maxY+p};}
 function mergeBounds(a,b){if(!validBounds(b))return;a.minX=Math.min(a.minX,b.minX);a.maxX=Math.max(a.maxX,b.maxX);a.minY=Math.min(a.minY,b.minY);a.maxY=Math.max(a.maxY,b.maxY);}
 function activeBounds(){if(showModels&&selectedOnly&&selectedModelId!=='__all__'){const m=models2d.find(x=>x.id===selectedModelId);if(validBounds(m?.bounds))return m.bounds;} if(showModels&&validBounds(projectBounds))return projectBounds; if(validBounds(cameraBounds))return cameraBounds; return null;}
 function fitView(bounds=activeBounds()){if(!validBounds(bounds))return;const pad=70,W=Math.max(10,canvas.width-pad*2),H=Math.max(10,canvas.height-pad*2);const mW=bounds.maxX-bounds.minX,mH=bounds.maxY-bounds.minY;scale=Math.min(W/mW,H/mH);if(!isFinite(scale)||scale<=0)scale=1;scale=Math.min(scale,250);offsetX=canvas.width/2-((bounds.minX+bounds.maxX)/2)*scale;offsetY=canvas.height/2+((bounds.minY+bounds.maxY)/2)*scale;}
@@ -76,16 +78,25 @@ function asArray(v){if(!v)return[];if(Array.isArray(v))return v;if(Array.isArray
 function normaliseBounds(raw){if(!raw)return null;const min=raw.min||raw.minimum||raw.low||raw.Min||raw.minPoint;const max=raw.max||raw.maximum||raw.high||raw.Max||raw.maxPoint;if(min&&max)return{minX:Number(min.x??min.X??min[0]),maxX:Number(max.x??max.X??max[0]),minY:Number(min.y??min.Y??min[1]),maxY:Number(max.y??max.Y??max[1])};if(['minX','maxX','minY','maxY'].every(k=>raw[k]!==undefined))return{minX:Number(raw.minX),maxX:Number(raw.maxX),minY:Number(raw.minY),maxY:Number(raw.maxY)};if(raw.boundingBox)return normaliseBounds(raw.boundingBox);if(raw.bbox)return normaliseBounds(raw.bbox);if(raw.bounds)return normaliseBounds(raw.bounds);return null;}
 function modelId(m){return String(m.id??m.modelId??m.fileId??m.documentId??m.guid??m.name??Math.random());}
 function modelName(m){return String(m.name??m.fileName??m.displayName??m.title??m.modelName??modelId(m));}
-async function getModelBounds(id,raw){let b=normaliseBounds(raw);if(validBounds(b))return b;const r=await tryCalls([
-  ()=>API.viewer?.getModelBoundingBox?.(id),
-  ()=>API.viewer?.getModelBounds?.(id),
-  ()=>API.viewer?.getObjectBoundingBox?.(id),
-  ()=>API.viewer?.getObjectsBoundingBox?.([id]),
-  ()=>API.viewer?.getBoundingBox?.(id),
-  ()=>API.viewer?.getBounds?.(id),
-  ()=>API.models?.getModelBoundingBox?.(id),
-  ()=>API.models?.getBoundingBox?.(id)
-]);return normaliseBounds(r);}
+async function getModelBounds(id,raw){
+let b=normaliseBounds(raw);if(validBounds(b))return b;
+const ids=[id, String(id), Number(id)].filter(v=>v!==undefined&&v!==null&&String(v)!=='NaN');
+for(const mid of ids){
+  const r=await tryCalls([
+    ()=>API.viewer?.getModelBoundingBox?.(mid),
+    ()=>API.viewer?.getModelBounds?.(mid),
+    ()=>API.viewer?.getObjectBoundingBox?.(mid),
+    ()=>API.viewer?.getObjectsBoundingBox?.([mid]),
+    ()=>API.viewer?.getBoundingBox?.(mid),
+    ()=>API.viewer?.getBounds?.(mid),
+    ()=>API.viewer?.getObjectRuntimeIdsByModelId?.(mid).then(async ids=>{const arr=asArray(ids);return arr.length?await tryCalls([()=>API.viewer?.getObjectsBoundingBox?.(arr),()=>API.viewer?.getObjectBoundingBox?.(arr)]):null;}),
+    ()=>API.viewer?.getObjects?.(mid).then(async objs=>{const arr=asArray(objs).map(o=>o.id??o.runtimeId??o.objectId).filter(Boolean);return arr.length?await tryCalls([()=>API.viewer?.getObjectsBoundingBox?.(arr),()=>API.viewer?.getObjectBoundingBox?.(arr)]):null;}),
+    ()=>API.models?.getModelBoundingBox?.(mid),
+    ()=>API.models?.getBoundingBox?.(mid)
+  ]);
+  b=normaliseBounds(r);if(validBounds(b))return b;
+}
+return null;}
 async function loadModels(){const sel=document.getElementById('modelSelector');sel.innerHTML='<option value="__all__">Henter modeller…</option>';setStatus('', 'Henter modeller…');const raw=await tryCalls([
   ()=>API.viewer?.getModels?.(),
   ()=>API.viewer?.getLoadedModels?.(),
@@ -94,12 +105,49 @@ async function loadModels(){const sel=document.getElementById('modelSelector');s
   ()=>API.models?.getModels?.(),
   ()=>API.project?.getModels?.()
 ]);const arr=asArray(raw);models2d=[];projectBounds={minX:Infinity,maxX:-Infinity,minY:Infinity,maxY:-Infinity};for(const m of arr){const id=modelId(m), name=modelName(m);const bounds=await getModelBounds(id,m);models2d.push({id,name,bounds});mergeBounds(projectBounds,bounds);}sel.innerHTML='';const all=document.createElement('option');all.value='__all__';all.textContent='Alle modeller';sel.appendChild(all);for(const m of models2d){const opt=document.createElement('option');opt.value=m.id;opt.textContent=validBounds(m.bounds)?m.name:`${m.name} (mangler 2D bbox)`;sel.appendChild(opt);}document.getElementById('modelCount').textContent=`${models2d.length} filer`;overlay.classList.add('hidden');if(models2d.length===0){setStatus('error','Fant ingen modeller');document.getElementById('overlayText').innerHTML='Fant ingen modeller via API.<br>Prøv ↻ etter at modellene er lastet.';overlay.classList.remove('hidden');}else if(!validBounds(projectBounds)){setStatus('error','Mangler bbox');document.getElementById('overlayText').innerHTML='Modeller funnet, men API returnerte ikke bounding box.<br>Minikartet kan derfor ikke tegne/zoome modellene.';overlay.classList.remove('hidden');}else{setStatus('live','Modeller lastet');autoFit=true;fitView(projectBounds);}draw();console.log('Minimap models2d:',models2d,'projectBounds:',projectBounds);}
-function zoomToSelectedModel(){let b=null;if(selectedModelId==='__all__')b=projectBounds;else b=models2d.find(m=>m.id===selectedModelId)?.bounds;if(validBounds(b)){autoFit=false;fitView(b);draw();}else{setStatus('error','Ingen bbox for valgt modell');}}
+async function zoomToSelectedModel(){
+  setStatus('', 'Zoomer…');
+  let b=null;
+  if(selectedModelId==='__all__') b=projectBounds;
+  else {
+    const m=models2d.find(x=>x.id===selectedModelId);
+    b=m?.bounds;
+    if(m && !validBounds(b)){
+      b=await getModelBounds(m.id,m);
+      if(validBounds(b)){m.bounds=b;projectBounds=boundsFromList(models2d.map(x=>x.bounds))||projectBounds;}
+    }
+  }
+
+  // Zoom minikartet når bbox finnes
+  if(validBounds(b)){
+    autoFit=false;
+    fitView(inflateBounds(b));
+    draw();
+    setStatus('live','Zoomet i minikart');
+    return;
+  }
+
+  // Fallback: prøv å zoome/fitte selve 3D-vieweren dersom TC API støtter det.
+  const targetIds = selectedModelId==='__all__' ? models2d.map(m=>m.id) : [selectedModelId];
+  const ok = await tryCalls([
+    ()=>API.viewer?.fitToView?.(targetIds),
+    ()=>API.viewer?.zoomToObjects?.(targetIds),
+    ()=>API.viewer?.zoomToObject?.(selectedModelId),
+    ()=>API.viewer?.zoomToModels?.(targetIds),
+    ()=>API.viewer?.zoomToModel?.(selectedModelId),
+    ()=>API.viewer?.setSelection?.(targetIds).then(()=>API.viewer?.zoomToSelection?.()),
+    ()=>API.viewer?.isolateObjects?.(targetIds).then(()=>API.viewer?.zoomToSelection?.())
+  ]);
+  if(ok!==null){setStatus('live','Zoom sendt til 3D-viewer');return;}
+
+  if(validBounds(cameraBounds)){autoFit=false;fitView(inflateBounds(cameraBounds,1.5));draw();setStatus('error','Mangler modell-bbox – zoomet til kamera');}
+  else setStatus('error','Zoom feilet: ingen bbox fra API');
+}
 
 document.getElementById('modelSelector').addEventListener('change',e=>{selectedModelId=e.target.value;if(selectedOnly)zoomToSelectedModel();else draw();});
 document.getElementById('showModels').addEventListener('change',e=>{showModels=e.target.checked;draw();});
 document.getElementById('selectedOnly').addEventListener('change',e=>{selectedOnly=e.target.checked;if(selectedOnly&&selectedModelId!=='__all__')zoomToSelectedModel();else draw();});
-document.getElementById('zoomModel').addEventListener('click',zoomToSelectedModel);document.getElementById('refreshModels').addEventListener('click',()=>loadModels());
+document.getElementById('zoomModel').addEventListener('click',()=>zoomToSelectedModel());document.getElementById('refreshModels').addEventListener('click',()=>loadModels());
 
 let dragging=false,dragX0=0,dragY0=0,off0X=0,off0Y=0;canvas.addEventListener('mousedown',e=>{dragging=true;autoFit=false;dragX0=e.clientX;dragY0=e.clientY;off0X=offsetX;off0Y=offsetY});window.addEventListener('mousemove',e=>{if(!dragging)return;offsetX=off0X+(e.clientX-dragX0);offsetY=off0Y+(e.clientY-dragY0);draw()});window.addEventListener('mouseup',()=>dragging=false);canvas.addEventListener('wheel',e=>{e.preventDefault();autoFit=false;const f=e.deltaY<0?1.15:.87;const r=canvas.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;offsetX=mx+(offsetX-mx)*f;offsetY=my+(offsetY-my)*f;scale*=f;draw()},{passive:false});document.getElementById('zoomIn').onclick=()=>{autoFit=false;scale*=1.3;draw()};document.getElementById('zoomOut').onclick=()=>{autoFit=false;scale/=1.3;draw()};document.getElementById('resetView').onclick=()=>{autoFit=true;fitView();draw()};
 
