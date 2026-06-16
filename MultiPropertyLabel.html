@@ -67,11 +67,10 @@
       <button class="mini-btn" id="configBtn">⚙</button>
     </div>
     <div class="toolbar-row">
-      <select id="coordMode" title="Koordinatsystem">
-        <option value="auto">Auto koordinater</option>
-        <option value="utm32">UTM32 / EPSG:25832</option>
-        <option value="utm33">UTM33 / EPSG:25833</option>
-        <option value="local">Lokal kalibrering</option>
+      <select id="coordMode" title="Koordinatsystem"></select>
+      <select id="axisOrder" title="Akse-rekkefølge">
+        <option value="xy">X=Øst, Y=Nord</option>
+        <option value="yx">X=Nord, Y=Øst</option>
       </select>
       <span id="modelCount">0 filer</span>
     </div>
@@ -85,7 +84,7 @@
 
   <div id="setupPanel">
     <h3 style="font-size:14px;color:var(--accent)">Kalibrering mot Google Maps</h3>
-    <p class="hint">Bruk dette bare hvis modellen har lokale koordinater. Har modellen UTM32/UTM33, velg riktig koordinatsystem i listen.</p>
+    <p class="hint">Velg EUREF89 UTM/NTM hvis modellen har kartplankoordinater. Høyde tolkes som NN2000 for visning, mens Google Maps bruker bare horisontal WGS84/EUREF89. Bruk lokal kalibrering bare hvis modellen har lokale koordinater.</p>
     <div class="setup-grid">
       <div class="form-row"><label>Modell X</label><input id="cfgMX" type="number" value="0"></div>
       <div class="form-row"><label>Modell Y</label><input id="cfgMY" type="number" value="0"></div>
@@ -125,26 +124,74 @@ let API=null,gmap=null,gmapsLoaded=false;
 let camPos={x:0,y:0,z:0}, camDir={x:0,y:1,z:0}, hasCamera=false, followCamera=true;
 let trail=[], MAX_TRAIL=500, models=[], selectedModelId="__all__";
 let cameraMarker=null,fovPolygon=null,trailPolyline=null,modelOverlays=[],pollTimer=null;
-let cfg={anchorModelX:0,anchorModelY:0,anchorLat:59.7380059,anchorLng:10.2107246,scaleX:1,scaleY:1,rotation:0,apiKey:""};
+let cfg={anchorModelX:0,anchorModelY:0,anchorLat:59.7380059,anchorLng:10.2107246,scaleX:1,scaleY:1,rotation:0,apiKey:"",crs:"auto",axisOrder:"xy"};
 const EARTH_R=6378137;
 
 function setStatus(type,text){document.getElementById('statusDot').className='status-dot'+(type?' '+type:'');document.getElementById('statusText').textContent=text}
 function toast(msg,dur=2400){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),dur)}
 
-function utmToLatLng(E,N,zone){
-  // WGS84 / GRS80 approximation, good enough for minimap display.
-  const a=6378137, f=1/298.257222101, k0=0.9996;
-  const e=Math.sqrt(f*(2-f)), e1=(1-Math.sqrt(1-e*e))/(1+Math.sqrt(1-e*e));
-  const x=E-500000, y=N, lon0=(zone*6-183)*Math.PI/180;
-  const M=y/k0, mu=M/(a*(1-e*e/4-3*Math.pow(e,4)/64-5*Math.pow(e,6)/256));
-  const J1=3*e1/2-27*Math.pow(e1,3)/32, J2=21*Math.pow(e1,2)/16-55*Math.pow(e1,4)/32, J3=151*Math.pow(e1,3)/96, J4=1097*Math.pow(e1,4)/512;
+// ─────────────────────────────────────────────────────────────
+// Coordinate systems used in Norway
+// Horizontal: EUREF89 UTM and EUREF89 NTM.
+// Vertical: NN2000. Z is displayed as NN2000 height, but Google Maps only uses lat/lng.
+// Google Maps uses WGS84 Web Mercator. EUREF89 is practically equivalent to WGS84
+// for this minimap purpose, so projected E/N is converted to geographic lat/lng.
+// ─────────────────────────────────────────────────────────────
+const CRS_DEFS = (() => {
+  const defs = [
+    { id:'auto',  name:'Auto – prøv å tolke koordinater' },
+    { id:'local', name:'Lokal kalibrering mot Google Maps' }
+  ];
+  // EUREF89 UTM zones relevant for Norway, incl. mainland, Jan Mayen and Svalbard use cases.
+  for (let z=31; z<=36; z++) {
+    defs.push({ id:`utm${z}`, name:`EUREF89 UTM sone ${z} + NN2000`, type:'utm', zone:z, epsg2d:25800+z, falseE:500000, k0:0.9996, lon0:z*6-183 });
+  }
+  // EUREF89 NTM zones 5–30, secondary official projection for construction purposes.
+  for (let z=5; z<=30; z++) {
+    defs.push({ id:`ntm${z}`, name:`EUREF89 NTM sone ${z} + NN2000`, type:'ntm', zone:z, falseE:100000, k0:1.0, lon0:z });
+  }
+  return defs;
+})();
+function populateCRS(){
+  const sel=document.getElementById('coordMode');
+  if(!sel) return;
+  sel.innerHTML='';
+  let current=cfg.crs||'auto';
+  let groups={auto:document.createElement('optgroup'),utm:document.createElement('optgroup'),ntm:document.createElement('optgroup')};
+  groups.auto.label='Auto / lokal'; groups.utm.label='EUREF89 UTM + NN2000'; groups.ntm.label='EUREF89 NTM + NN2000';
+  CRS_DEFS.forEach(d=>{
+    const o=document.createElement('option'); o.value=d.id; o.textContent=d.name + (d.epsg2d?` / EPSG:${d.epsg2d}`:'');
+    groups[d.type||'auto'].appendChild(o);
+  });
+  sel.appendChild(groups.auto); sel.appendChild(groups.utm); sel.appendChild(groups.ntm);
+  sel.value=CRS_DEFS.some(d=>d.id===current)?current:'auto';
+}
+function getCRS(id){return CRS_DEFS.find(d=>d.id===id)||CRS_DEFS[0]}
+function axisEN(mx,my){
+  const order=document.getElementById('axisOrder')?.value || cfg.axisOrder || 'xy';
+  return order==='yx' ? {E:+my,N:+mx} : {E:+mx,N:+my};
+}
+function projectedToLatLng(E,N,def){
+  // Inverse Transverse Mercator using GRS80/EUREF89 ellipsoid.
+  // UTM: false east 500000, k0 0.9996, lon0 by zone.
+  // NTM: false east 100000, k0 1.0, lon0 = zone number in degrees east.
+  const a=6378137, f=1/298.257222101;
+  const e2=f*(2-f), ep2=e2/(1-e2), e1=(1-Math.sqrt(1-e2))/(1+Math.sqrt(1-e2));
+  const k0=def.k0, x=E-def.falseE, y=N, lon0=def.lon0*Math.PI/180;
+  const M=y/k0;
+  const mu=M/(a*(1-e2/4-3*e2*e2/64-5*e2*e2*e2/256));
+  const J1=3*e1/2-27*Math.pow(e1,3)/32;
+  const J2=21*Math.pow(e1,2)/16-55*Math.pow(e1,4)/32;
+  const J3=151*Math.pow(e1,3)/96;
+  const J4=1097*Math.pow(e1,4)/512;
   const fp=mu+J1*Math.sin(2*mu)+J2*Math.sin(4*mu)+J3*Math.sin(6*mu)+J4*Math.sin(8*mu);
-  const C1=Math.pow(e,2)/(1-e*e)*Math.pow(Math.cos(fp),2), T1=Math.pow(Math.tan(fp),2);
-  const R1=a*(1-e*e)/Math.pow(1-e*e*Math.pow(Math.sin(fp),2),1.5);
-  const N1=a/Math.sqrt(1-e*e*Math.pow(Math.sin(fp),2));
+  const sinfp=Math.sin(fp), cosfp=Math.cos(fp), tanfp=Math.tan(fp);
+  const C1=ep2*cosfp*cosfp, T1=tanfp*tanfp;
+  const R1=a*(1-e2)/Math.pow(1-e2*sinfp*sinfp,1.5);
+  const N1=a/Math.sqrt(1-e2*sinfp*sinfp);
   const D=x/(N1*k0);
-  const lat=fp-(N1*Math.tan(fp)/R1)*(D*D/2-(5+3*T1+10*C1-4*C1*C1-9*Math.pow(e,2)/(1-e*e))*Math.pow(D,4)/24+(61+90*T1+298*C1+45*T1*T1-252*Math.pow(e,2)/(1-e*e)-3*C1*C1)*Math.pow(D,6)/720);
-  const lon=lon0+(D-(1+2*T1+C1)*Math.pow(D,3)/6+(5-2*C1+28*T1-3*C1*C1+8*Math.pow(e,2)/(1-e*e)+24*T1*T1)*Math.pow(D,5)/120)/Math.cos(fp);
+  const lat=fp-(N1*tanfp/R1)*(D*D/2-(5+3*T1+10*C1-4*C1*C1-9*ep2)*Math.pow(D,4)/24+(61+90*T1+298*C1+45*T1*T1-252*ep2-3*C1*C1)*Math.pow(D,6)/720);
+  const lon=lon0+(D-(1+2*T1+C1)*Math.pow(D,3)/6+(5-2*C1+28*T1-3*C1*C1+8*ep2+24*T1*T1)*Math.pow(D,5)/120)/cosfp;
   return {lat:lat*180/Math.PI,lng:lon*180/Math.PI};
 }
 function localToLatLng(mx,my){
@@ -153,26 +200,32 @@ function localToLatLng(mx,my){
   const latRad=cfg.anchorLat*Math.PI/180;
   return {lat:cfg.anchorLat+north/EARTH_R*180/Math.PI,lng:cfg.anchorLng+east/(EARTH_R*Math.cos(latRad))*180/Math.PI};
 }
-function inferModeFor(x,y){
-  const cm=document.getElementById('coordMode').value;
-  if(cm!=="auto") return cm;
-  if(x>100000&&x<900000&&y>6000000&&y<8000000) return "utm32";
-  if(y>6000000&&y<8000000) return "utm33";
-  return "local";
+function inferModeFor(mx,my){
+  const selected=document.getElementById('coordMode')?.value || cfg.crs || 'auto';
+  if(selected!=='auto') return selected;
+  const {E,N}=axisEN(mx,my);
+  // Typical Norwegian projected northing range. Pick UTM zone from approximate longitude if possible,
+  // otherwise default to UTM32 for mainland eastings in normal UTM range.
+  if(E>100000 && E<900000 && N>6300000 && N<8900000) return 'utm32';
+  if(E>50000 && E<150000 && N>6300000 && N<8900000) return 'ntm10';
+  return 'local';
 }
 function modelToLatLng(mx,my){
   const mode=inferModeFor(mx,my);
-  if(mode==="utm32") return utmToLatLng(mx,my,32);
-  if(mode==="utm33") return utmToLatLng(mx,my,33);
+  if(mode==='local') return localToLatLng(mx,my);
+  const def=getCRS(mode);
+  if(def.type==='utm' || def.type==='ntm'){
+    const {E,N}=axisEN(mx,my);
+    return projectedToLatLng(E,N,def);
+  }
   return localToLatLng(mx,my);
 }
 function headingTrue(){
   const mode=inferModeFor(camPos.x,camPos.y);
   const modelHeading=Math.atan2(camDir.x,camDir.y)*180/Math.PI;
-  const add=(mode==="local")?cfg.rotation:0;
+  const add=(mode==='local')?cfg.rotation:0;
   return (modelHeading+add+360)%360;
 }
-
 function loadGoogleMaps(){
   return new Promise((resolve,reject)=>{
     if(gmapsLoaded || window.google?.maps){gmapsLoaded=true;resolve();return}
@@ -329,15 +382,16 @@ async function initTrimble(){
     setTimeout(loadModels,800);
   }catch(e){console.error(e);setStatus('error','Trimble ikke tilkoblet');toast('Trimble Connect API ikke tilgjengelig');}
 }
-function readCfg(){try{Object.assign(cfg,JSON.parse(localStorage.getItem('tc_minimap_google_v8')||'{}'))}catch(e){}; ['MX','MY','Lat','Lng','ScaleX','ScaleY','Rotation','ApiKey'].forEach(k=>{const el=document.getElementById('cfg'+k); if(!el)return; const prop={MX:'anchorModelX',MY:'anchorModelY',Lat:'anchorLat',Lng:'anchorLng',ScaleX:'scaleX',ScaleY:'scaleY',Rotation:'rotation',ApiKey:'apiKey'}[k]; el.value=cfg[prop]??''});}
-function saveCfg(){cfg.anchorModelX=parseFloat(cfgMX.value)||0;cfg.anchorModelY=parseFloat(cfgMY.value)||0;cfg.anchorLat=parseFloat(cfgLat.value)||59.7380059;cfg.anchorLng=parseFloat(cfgLng.value)||10.2107246;cfg.scaleX=parseFloat(cfgScaleX.value)||1;cfg.scaleY=parseFloat(cfgScaleY.value)||1;cfg.rotation=parseFloat(cfgRotation.value)||0;cfg.apiKey=cfgApiKey.value.trim();localStorage.setItem('tc_minimap_google_v8',JSON.stringify(cfg));setupPanel.classList.remove('show');toast('Kalibrering lagret'); if(gmap){drawModels();updateCameraMap();fitAll();}}
+function readCfg(){try{Object.assign(cfg,JSON.parse(localStorage.getItem('tc_minimap_google_v9')||localStorage.getItem('tc_minimap_google_v8')||'{}'))}catch(e){}; populateCRS(); ['MX','MY','Lat','Lng','ScaleX','ScaleY','Rotation','ApiKey'].forEach(k=>{const el=document.getElementById('cfg'+k); if(!el)return; const prop={MX:'anchorModelX',MY:'anchorModelY',Lat:'anchorLat',Lng:'anchorLng',ScaleX:'scaleX',ScaleY:'scaleY',Rotation:'rotation',ApiKey:'apiKey'}[k]; el.value=cfg[prop]??''}); const cm=document.getElementById('coordMode'); if(cm) cm.value=cfg.crs||'auto'; const ax=document.getElementById('axisOrder'); if(ax) ax.value=cfg.axisOrder||'xy';}
+function saveCfg(){cfg.anchorModelX=parseFloat(cfgMX.value)||0;cfg.anchorModelY=parseFloat(cfgMY.value)||0;cfg.anchorLat=parseFloat(cfgLat.value)||59.7380059;cfg.anchorLng=parseFloat(cfgLng.value)||10.2107246;cfg.scaleX=parseFloat(cfgScaleX.value)||1;cfg.scaleY=parseFloat(cfgScaleY.value)||1;cfg.rotation=parseFloat(cfgRotation.value)||0;cfg.apiKey=cfgApiKey.value.trim();cfg.crs=document.getElementById('coordMode')?.value||'auto';cfg.axisOrder=document.getElementById('axisOrder')?.value||'xy';localStorage.setItem('tc_minimap_google_v9',JSON.stringify(cfg));setupPanel.classList.remove('show');toast('Koordinatsystem/kalibrering lagret'); if(gmap){drawModels();updateCameraMap();fitAll();}}
 
 document.getElementById('refreshModels').onclick=loadModels;
 document.getElementById('zoomModel').onclick=fitAll;
 document.getElementById('centerCamera').onclick=()=>{if(hasCamera&&gmap){gmap.panTo(modelToLatLng(camPos.x,camPos.y));gmap.setZoom(Math.max(gmap.getZoom(),19))}};
 document.getElementById('followBtn').onclick=e=>{followCamera=!followCamera;e.currentTarget.classList.toggle('active',followCamera); if(followCamera) document.getElementById('centerCamera').click()};
 document.getElementById('modelSelector').onchange=e=>{selectedModelId=e.target.value;drawModels();fitAll()};
-document.getElementById('coordMode').onchange=()=>{drawModels();updateCameraMap();fitAll()};
+document.getElementById('coordMode').onchange=()=>{cfg.crs=document.getElementById('coordMode').value; drawModels();updateCameraMap();fitAll()};
+document.getElementById('axisOrder').onchange=()=>{cfg.axisOrder=document.getElementById('axisOrder').value; drawModels();updateCameraMap();fitAll()};
 ['showModels','showTrail','showFOV','onlySelected'].forEach(id=>document.getElementById(id).onchange=()=>{drawModels();updateCameraMap();});
 document.getElementById('configBtn').onclick=()=>setupPanel.classList.add('show');
 document.getElementById('closeCfg').onclick=()=>setupPanel.classList.remove('show');
