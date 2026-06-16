@@ -2,406 +2,53 @@
 <html lang="nb">
 <head>
   <meta charset="UTF-8"/>
-  <title>ACC-style Minimap – Google Maps – Trimble Connect</title>
+  <title>ACC-style Minimap – Kartverket – Trimble Connect</title>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <link href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" rel="stylesheet"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://components.connect.trimble.com/trimble-connect-workspace-api/index.js"></script>
   <style>
-    :root{
-      --bg:#10131b;--panel:rgba(20,26,44,.96);--border:#2e3855;
-      --text:#f1f3f4;--muted:#9aa0a6;--accent:#00d4ff;
-      --danger:#ff5252;--success:#4caf50;--warn:#ffb020;
-      font-family:system-ui,-apple-system,"Segoe UI",sans-serif
-    }
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{height:100vh;background:var(--bg);color:var(--text);display:flex;flex-direction:column;overflow:hidden;user-select:none}
-    header{height:32px;display:flex;align-items:center;justify-content:space-between;padding:0 10px;background:var(--panel);border-bottom:1px solid var(--border);flex:0 0 auto;gap:8px}
-    .title{font-size:12px;font-weight:900;letter-spacing:.06em;color:var(--accent);text-transform:uppercase}
-    .status-dot{width:7px;height:7px;border-radius:50%;background:var(--muted)}
-    .status-dot.live{background:var(--success);box-shadow:0 0 6px var(--success)}
-    .status-dot.error{background:var(--danger)} .status-dot.warn{background:var(--warn)}
-    #mapDiv{flex:1;position:relative;background:#0b0f19}
-    #gmap{position:absolute;inset:0}
-    .toolbar{position:absolute;top:8px;left:8px;background:var(--panel);border:1px solid var(--border);border-radius:9px;padding:7px 8px;display:flex;flex-direction:column;gap:6px;z-index:5;max-width:calc(100% - 58px)}
-    .toolbar-row{display:flex;gap:5px;align-items:center;flex-wrap:wrap}
-    select,input{background:#111827;color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 7px;font-size:11px;outline:none}
-    select{min-width:120px;flex:1}
-    .mini-btn{border:1px solid var(--border);background:#111827;color:var(--text);border-radius:6px;padding:0 8px;font-size:11px;font-weight:800;cursor:pointer;height:26px;white-space:nowrap}
-    .mini-btn:hover{background:#1a73e8;color:#fff}.mini-btn.active{background:#0d4f73;border-color:var(--accent);color:#fff}
-    .filter-row{display:flex;gap:10px;flex-wrap:wrap;font-size:10px;color:var(--muted)} .filter-row label{display:flex;align-items:center;gap:3px;cursor:pointer}.filter-row input{accent-color:var(--accent)}
-    #modelCount{margin-left:auto;font-size:10px;font-weight:800;color:var(--muted)}
-    #levelBadge{position:absolute;top:8px;right:54px;background:var(--panel);border:1px solid var(--border);border-radius:7px;padding:3px 9px;font-size:11px;font-weight:800;color:var(--accent);z-index:5}
-    #compassWrap{position:absolute;top:8px;right:8px;width:40px;height:40px;z-index:5;pointer-events:none}
-    .controls{position:absolute;right:8px;bottom:8px;display:flex;flex-direction:column;gap:4px;z-index:5}
-    .ctrl-btn{width:30px;height:30px;border-radius:7px;border:1px solid var(--border);background:var(--panel);color:var(--text);font-size:15px;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center}
-    .ctrl-btn:hover{background:#1a73e8;color:#fff}
-    .info-bar{display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--panel);border-top:1px solid var(--border);flex:0 0 auto}
-    .info-cell{display:flex;flex-direction:column;align-items:center;padding:5px 8px;border-right:1px solid var(--border)}.info-cell:last-child{border-right:none}
-    .info-label{font-size:9px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
-    .info-value{font-size:12px;font-weight:900;font-variant-numeric:tabular-nums;color:var(--accent);margin-top:1px}
-    #toast{position:absolute;bottom:48px;left:50%;transform:translateX(-50%);background:var(--panel);border:1px solid var(--border);border-radius:7px;padding:6px 14px;font-size:11px;z-index:10;white-space:nowrap;opacity:0;transition:opacity .3s}
-    #toast.show{opacity:1}
-    #setupPanel{position:absolute;inset:0;z-index:20;background:rgba(10,14,24,.93);display:none;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:20px;text-align:center}
-    #setupPanel.show{display:flex}.setup-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;max-width:420px}.form-row{display:flex;flex-direction:column;gap:4px;text-align:left}.form-row label{font-size:11px;color:var(--muted);font-weight:700}.hint{font-size:10px;color:var(--muted);max-width:420px;line-height:1.45}
-    .map-error{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:20px;color:var(--muted);z-index:1}
+    :root{--bg:#10131b;--panel:rgba(20,26,44,.96);--border:#2e3855;--text:#f1f3f4;--muted:#9aa0a6;--accent:#00d4ff;--danger:#ff5252;--success:#4caf50;--warn:#ffb020;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+    *{box-sizing:border-box;margin:0;padding:0} body{height:100vh;background:var(--bg);color:var(--text);display:flex;flex-direction:column;overflow:hidden;user-select:none}
+    header{height:32px;display:flex;align-items:center;justify-content:space-between;padding:0 10px;background:var(--panel);border-bottom:1px solid var(--border);flex:0 0 auto;gap:8px}.title{font-size:12px;font-weight:900;letter-spacing:.06em;color:var(--accent);text-transform:uppercase}.status-dot{width:7px;height:7px;border-radius:50%;background:var(--muted)}.status-dot.live{background:var(--success);box-shadow:0 0 6px var(--success)}.status-dot.error{background:var(--danger)}.status-dot.warn{background:var(--warn)}
+    #mapDiv{flex:1;position:relative}#gmap{position:absolute;inset:0;background:#172033}.leaflet-container{background:#172033}.leaflet-control-attribution{font-size:9px!important;background:rgba(255,255,255,.75)!important}
+    .toolbar{position:absolute;top:8px;left:8px;background:var(--panel);border:1px solid var(--border);border-radius:9px;padding:7px 8px;display:flex;flex-direction:column;gap:6px;z-index:500;max-width:calc(100% - 58px)}.toolbar-row{display:flex;gap:5px;align-items:center;flex-wrap:wrap}select.mini-sel{background:#111827;color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 7px;font-size:11px;outline:none;min-width:130px;flex:1}.mini-btn{border:1px solid var(--border);background:#111827;color:var(--text);border-radius:6px;padding:0 8px;font-size:11px;font-weight:800;cursor:pointer;height:26px;white-space:nowrap}.mini-btn:hover{background:#1a73e8;color:#fff}.mini-btn.active{background:#0d4f73;border-color:var(--accent);color:#fff}.filter-row{display:flex;gap:10px;flex-wrap:wrap;font-size:10px;color:var(--muted)}.filter-row label{display:flex;align-items:center;gap:3px;cursor:pointer}.filter-row input{accent-color:var(--accent)}#modelCount{margin-left:auto;font-size:10px;font-weight:800;color:var(--muted)}
+    #levelBadge{position:absolute;top:8px;right:54px;background:var(--panel);border:1px solid var(--border);border-radius:7px;padding:3px 9px;font-size:11px;font-weight:800;color:var(--accent);z-index:500}#compassWrap{position:absolute;top:8px;right:8px;width:40px;height:40px;z-index:500;pointer-events:none}.controls{position:absolute;right:8px;bottom:8px;display:flex;flex-direction:column;gap:4px;z-index:500}.ctrl-btn{width:30px;height:30px;border-radius:7px;border:1px solid var(--border);background:var(--panel);color:var(--text);font-size:15px;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center}.ctrl-btn:hover{background:#1a73e8;color:#fff}
+    .info-bar{display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--panel);border-top:1px solid var(--border);flex:0 0 auto}.info-cell{display:flex;flex-direction:column;align-items:center;padding:5px 8px;border-right:1px solid var(--border)}.info-cell:last-child{border-right:none}.info-label{font-size:9px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}.info-value{font-size:12px;font-weight:900;font-variant-numeric:tabular-nums;color:var(--accent);margin-top:1px}
+    #setupPanel{position:absolute;top:48px;left:50%;transform:translateX(-50%);width:min(540px,calc(100% - 20px));background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px;z-index:900;display:none;box-shadow:0 12px 40px rgba(0,0,0,.38)}#setupPanel.show{display:block}.setup-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.form-row{display:flex;flex-direction:column;gap:3px}.form-row label{font-size:10px;color:var(--muted);font-weight:800}.form-row input,.form-row select{background:#111827;color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:11px}.hint{font-size:10px;color:var(--muted);line-height:1.45;margin:6px 0 10px}.panel-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}
+    #toast{position:absolute;bottom:48px;left:50%;transform:translateX(-50%);background:var(--panel);border:1px solid var(--border);border-radius:7px;padding:6px 14px;font-size:11px;z-index:1000;white-space:nowrap;opacity:0;transition:opacity .3s}#toast.show{opacity:1}
+    .cam-icon{width:42px;height:42px;position:relative}.cam-icon .ring{position:absolute;left:10px;top:10px;width:22px;height:22px;border-radius:50%;background:rgba(0,212,255,.25);border:2px solid #00d4ff}.cam-icon .arrow{position:absolute;left:9px;top:1px;width:24px;height:34px;transform-origin:12px 20px}.cam-icon .arrow:before{content:"";position:absolute;left:4px;top:0;border-left:8px solid transparent;border-right:8px solid transparent;border-bottom:25px solid #00d4ff;filter:drop-shadow(0 1px 1px #06131c)}.model-label{color:white;font-size:10px;font-weight:800;text-shadow:0 1px 3px #000;white-space:nowrap}.model-label.selected{color:#00d4ff}.hidden{display:none!important}
   </style>
 </head>
 <body>
-<header>
-  <div style="display:flex;align-items:center;gap:7px">
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3V6z"/><path d="M9 3v15M15 6v15"/></svg>
-    <span class="title">ACC-style minimap</span>
-  </div>
-  <div style="display:flex;align-items:center;gap:6px"><span id="statusText" style="font-size:11px;color:var(--muted)">Starter…</span><div class="status-dot" id="statusDot"></div></div>
-</header>
-
+<header><div style="display:flex;align-items:center;gap:7px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3V6z"/><path d="M9 3v15M15 6v15"/></svg><span class="title">Minimap – Kartverket</span></div><div style="display:flex;align-items:center;gap:6px"><span id="statusText" style="font-size:11px;color:var(--muted)">Starter…</span><div class="status-dot" id="statusDot"></div></div></header>
 <div id="mapDiv">
-  <div id="gmap"><div class="map-error">Laster Google Maps …<br>Legg inn API-nøkkel under ⚙ dersom kartet ikke vises.</div></div>
-
-  <div class="toolbar">
-    <div class="toolbar-row">
-      <select id="modelSelector"><option value="__all__">Alle modeller</option></select>
-      <button class="mini-btn" id="refreshModels">↻</button>
-      <button class="mini-btn" id="zoomModel">Zoom modell</button>
-      <button class="mini-btn" id="centerCamera">Ståsted</button>
-      <button class="mini-btn active" id="followBtn">Følg</button>
-      <button class="mini-btn" id="configBtn">⚙</button>
-    </div>
-    <div class="toolbar-row">
-      <select id="coordMode" title="Koordinatsystem"></select>
-      <select id="axisOrder" title="Akse-rekkefølge">
-        <option value="xy">X=Øst, Y=Nord</option>
-        <option value="yx">X=Nord, Y=Øst</option>
-      </select>
-      <span id="modelCount">0 filer</span>
-    </div>
-    <div class="filter-row">
-      <label><input type="checkbox" id="showModels" checked> Modellomriss</label>
-      <label><input type="checkbox" id="showTrail" checked> Spor</label>
-      <label><input type="checkbox" id="showFOV" checked> Synsfelt</label>
-      <label><input type="checkbox" id="onlySelected"> Kun valgt</label>
-    </div>
-  </div>
-
-  <div id="setupPanel">
-    <h3 style="font-size:14px;color:var(--accent)">Kalibrering mot Google Maps</h3>
-    <p class="hint">Velg EUREF89 UTM/NTM hvis modellen har kartplankoordinater. Høyde tolkes som NN2000 for visning, mens Google Maps bruker bare horisontal WGS84/EUREF89. Bruk lokal kalibrering bare hvis modellen har lokale koordinater.</p>
-    <div class="setup-grid">
-      <div class="form-row"><label>Modell X</label><input id="cfgMX" type="number" value="0"></div>
-      <div class="form-row"><label>Modell Y</label><input id="cfgMY" type="number" value="0"></div>
-      <div class="form-row"><label>Latitude</label><input id="cfgLat" type="number" step="any" value="59.7380059"></div>
-      <div class="form-row"><label>Longitude</label><input id="cfgLng" type="number" step="any" value="10.2107246"></div>
-      <div class="form-row"><label>Meter pr. modell-X</label><input id="cfgScaleX" type="number" step="any" value="1"></div>
-      <div class="form-row"><label>Meter pr. modell-Y</label><input id="cfgScaleY" type="number" step="any" value="1"></div>
-    </div>
-    <div class="form-row" style="width:100%;max-width:420px"><label>Rotasjon grader, 0 = modell-Y nord</label><input id="cfgRotation" type="number" step="any" value="0"></div>
-    <div class="form-row" style="width:100%;max-width:420px"><label>Google Maps API-nøkkel</label><input id="cfgApiKey" type="text" placeholder="AIza…"></div>
-    <div style="display:flex;gap:8px"><button class="mini-btn" id="saveCfg" style="height:32px;background:#1a73e8;color:#fff;border-color:#1a73e8">Lagre</button><button class="mini-btn" id="closeCfg" style="height:32px">Lukk</button></div>
-  </div>
-
-  <div id="levelBadge">Z: –</div>
-  <svg id="compassWrap" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="24" cy="24" r="22" fill="rgba(20,26,44,.92)" stroke="#2e3855" stroke-width="1.5"/>
-    <polygon id="compassNeedle" points="24,5 27,24 24,20 21,24" fill="var(--accent)" opacity=".95"/>
-    <polygon id="compassNeedleS" points="24,43 21,24 24,28 27,24" fill="#9aa0a6" opacity=".55"/>
-    <text x="24" y="14" text-anchor="middle" font-size="6" font-weight="900" fill="var(--accent)" font-family="system-ui">N</text>
-  </svg>
-  <div class="controls">
-    <button class="ctrl-btn" id="zoomIn">+</button>
-    <button class="ctrl-btn" id="zoomOut">−</button>
-    <button class="ctrl-btn" id="resetView">⊙</button>
-  </div>
-  <div id="toast"></div>
+  <div id="gmap"></div>
+  <div class="toolbar"><div class="toolbar-row"><select class="mini-sel" id="modelSelector"><option value="__all__">Alle modeller</option></select><button class="mini-btn" id="refreshModels">↻</button><button class="mini-btn" id="zoomModel">Zoom</button><button class="mini-btn" id="centerCamera">Ståsted</button><button class="mini-btn active" id="followBtn">Følg</button><button class="mini-btn" id="configBtn">⚙</button></div><div class="toolbar-row"><select class="mini-sel" id="mapLayer"><option value="topo">Kartverket topo</option><option value="topograatone">Gråtonekart</option><option value="toporaster">Turkart/raster</option><option value="sjokartraster">Sjøkart</option></select><select class="mini-sel" id="coordMode"></select><select class="mini-sel" id="axisOrder"><option value="xy">X=øst, Y=nord</option><option value="yx">X=nord, Y=øst</option></select></div><div class="filter-row"><label><input type="checkbox" id="showModels" checked> Modellomriss</label><label><input type="checkbox" id="onlySelected"> Kun valgt</label><label><input type="checkbox" id="showTrail" checked> Spor</label><label><input type="checkbox" id="showFOV" checked> Synsfelt</label><span id="modelCount">0 filer</span></div></div>
+  <div id="setupPanel"><h3 style="font-size:14px;color:var(--accent)">Koordinatsystem og georeferering</h3><p class="hint">Kartgrunnlaget er Kartverkets WMTS/cache. Velg EUREF89 UTM/NTM når modellen har kartplankoordinater. Høyde vises som NN2000. Lokal kalibrering brukes bare når modellen har lokale koordinater.</p><div class="setup-grid"><div class="form-row"><label>Koordinatsystem</label><select id="cfgCRS"></select></div><div class="form-row"><label>Akser</label><select id="cfgAxis"><option value="xy">X=øst, Y=nord</option><option value="yx">X=nord, Y=øst</option></select></div><div class="form-row"><label>Lokal modell X</label><input id="cfgMX" type="number" step="any" value="0"></div><div class="form-row"><label>Lokal modell Y</label><input id="cfgMY" type="number" step="any" value="0"></div><div class="form-row"><label>Lokal latitude</label><input id="cfgLat" type="number" step="any" value="59.7380059"></div><div class="form-row"><label>Lokal longitude</label><input id="cfgLng" type="number" step="any" value="10.2107246"></div><div class="form-row"><label>Meter pr. modellenhet X</label><input id="cfgScaleX" type="number" step="any" value="1"></div><div class="form-row"><label>Meter pr. modellenhet Y</label><input id="cfgScaleY" type="number" step="any" value="1"></div><div class="form-row"><label>Rotasjon lokal nord</label><input id="cfgRotation" type="number" step="any" value="0"></div><div class="form-row"><label>Høydesystem</label><input value="NN2000" disabled></div></div><div class="panel-actions"><button class="mini-btn" id="closeCfg">Lukk</button><button class="mini-btn" id="saveCfg" style="background:#1a73e8;color:white;border-color:#1a73e8">Lagre</button></div></div>
+  <div id="levelBadge">NN2000 Z: –</div><svg id="compassWrap" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><circle cx="24" cy="24" r="22" fill="rgba(20,26,44,.92)" stroke="#2e3855" stroke-width="1.5"/><polygon id="compassNeedle" points="24,5 27,24 24,20 21,24" fill="var(--accent)" opacity=".95"/><polygon id="compassNeedleS" points="24,43 21,24 24,28 27,24" fill="#9aa0a6" opacity=".55"/><text x="24" y="14" text-anchor="middle" font-size="6" font-weight="900" fill="var(--accent)" font-family="system-ui">N</text></svg>
+  <div class="controls"><button class="ctrl-btn" id="zoomIn">+</button><button class="ctrl-btn" id="zoomOut">−</button><button class="ctrl-btn" id="resetView">⊙</button></div><div id="toast"></div>
 </div>
-
-<div class="info-bar">
-  <div class="info-cell"><span class="info-label">Lat</span><span class="info-value" id="valLat">–</span></div>
-  <div class="info-cell"><span class="info-label">Lng</span><span class="info-value" id="valLng">–</span></div>
-  <div class="info-cell"><span class="info-label">Retning</span><span class="info-value" id="valDir">–°</span></div>
-</div>
-
+<div class="info-bar"><div class="info-cell"><span class="info-label">Lat</span><span class="info-value" id="valLat">–</span></div><div class="info-cell"><span class="info-label">Lng</span><span class="info-value" id="valLng">–</span></div><div class="info-cell"><span class="info-label">Retning</span><span class="info-value" id="valDir">–°</span></div></div>
 <script>
-let API=null,gmap=null,gmapsLoaded=false;
-let camPos={x:0,y:0,z:0}, camDir={x:0,y:1,z:0}, hasCamera=false, followCamera=true;
-let trail=[], MAX_TRAIL=500, models=[], selectedModelId="__all__";
-let cameraMarker=null,fovPolygon=null,trailPolyline=null,modelOverlays=[],pollTimer=null;
-let cfg={anchorModelX:0,anchorModelY:0,anchorLat:59.7380059,anchorLng:10.2107246,scaleX:1,scaleY:1,rotation:0,apiKey:"",crs:"auto",axisOrder:"xy"};
-const EARTH_R=6378137;
-
-function setStatus(type,text){document.getElementById('statusDot').className='status-dot'+(type?' '+type:'');document.getElementById('statusText').textContent=text}
-function toast(msg,dur=2400){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),dur)}
-
-// ─────────────────────────────────────────────────────────────
-// Coordinate systems used in Norway
-// Horizontal: EUREF89 UTM and EUREF89 NTM.
-// Vertical: NN2000. Z is displayed as NN2000 height, but Google Maps only uses lat/lng.
-// Google Maps uses WGS84 Web Mercator. EUREF89 is practically equivalent to WGS84
-// for this minimap purpose, so projected E/N is converted to geographic lat/lng.
-// ─────────────────────────────────────────────────────────────
-const CRS_DEFS = (() => {
-  const defs = [
-    { id:'auto',  name:'Auto – prøv å tolke koordinater' },
-    { id:'local', name:'Lokal kalibrering mot Google Maps' }
-  ];
-  // EUREF89 UTM zones relevant for Norway, incl. mainland, Jan Mayen and Svalbard use cases.
-  for (let z=31; z<=36; z++) {
-    defs.push({ id:`utm${z}`, name:`EUREF89 UTM sone ${z} + NN2000`, type:'utm', zone:z, epsg2d:25800+z, falseE:500000, k0:0.9996, lon0:z*6-183 });
-  }
-  // EUREF89 NTM zones 5–30, secondary official projection for construction purposes.
-  for (let z=5; z<=30; z++) {
-    defs.push({ id:`ntm${z}`, name:`EUREF89 NTM sone ${z} + NN2000`, type:'ntm', zone:z, falseE:100000, k0:1.0, lon0:z });
-  }
-  return defs;
-})();
-function populateCRS(){
-  const sel=document.getElementById('coordMode');
-  if(!sel) return;
-  sel.innerHTML='';
-  let current=cfg.crs||'auto';
-  let groups={auto:document.createElement('optgroup'),utm:document.createElement('optgroup'),ntm:document.createElement('optgroup')};
-  groups.auto.label='Auto / lokal'; groups.utm.label='EUREF89 UTM + NN2000'; groups.ntm.label='EUREF89 NTM + NN2000';
-  CRS_DEFS.forEach(d=>{
-    const o=document.createElement('option'); o.value=d.id; o.textContent=d.name + (d.epsg2d?` / EPSG:${d.epsg2d}`:'');
-    groups[d.type||'auto'].appendChild(o);
-  });
-  sel.appendChild(groups.auto); sel.appendChild(groups.utm); sel.appendChild(groups.ntm);
-  sel.value=CRS_DEFS.some(d=>d.id===current)?current:'auto';
-}
-function getCRS(id){return CRS_DEFS.find(d=>d.id===id)||CRS_DEFS[0]}
-function axisEN(mx,my){
-  const order=document.getElementById('axisOrder')?.value || cfg.axisOrder || 'xy';
-  return order==='yx' ? {E:+my,N:+mx} : {E:+mx,N:+my};
-}
-function projectedToLatLng(E,N,def){
-  // Inverse Transverse Mercator using GRS80/EUREF89 ellipsoid.
-  // UTM: false east 500000, k0 0.9996, lon0 by zone.
-  // NTM: false east 100000, k0 1.0, lon0 = zone number in degrees east.
-  const a=6378137, f=1/298.257222101;
-  const e2=f*(2-f), ep2=e2/(1-e2), e1=(1-Math.sqrt(1-e2))/(1+Math.sqrt(1-e2));
-  const k0=def.k0, x=E-def.falseE, y=N, lon0=def.lon0*Math.PI/180;
-  const M=y/k0;
-  const mu=M/(a*(1-e2/4-3*e2*e2/64-5*e2*e2*e2/256));
-  const J1=3*e1/2-27*Math.pow(e1,3)/32;
-  const J2=21*Math.pow(e1,2)/16-55*Math.pow(e1,4)/32;
-  const J3=151*Math.pow(e1,3)/96;
-  const J4=1097*Math.pow(e1,4)/512;
-  const fp=mu+J1*Math.sin(2*mu)+J2*Math.sin(4*mu)+J3*Math.sin(6*mu)+J4*Math.sin(8*mu);
-  const sinfp=Math.sin(fp), cosfp=Math.cos(fp), tanfp=Math.tan(fp);
-  const C1=ep2*cosfp*cosfp, T1=tanfp*tanfp;
-  const R1=a*(1-e2)/Math.pow(1-e2*sinfp*sinfp,1.5);
-  const N1=a/Math.sqrt(1-e2*sinfp*sinfp);
-  const D=x/(N1*k0);
-  const lat=fp-(N1*tanfp/R1)*(D*D/2-(5+3*T1+10*C1-4*C1*C1-9*ep2)*Math.pow(D,4)/24+(61+90*T1+298*C1+45*T1*T1-252*ep2-3*C1*C1)*Math.pow(D,6)/720);
-  const lon=lon0+(D-(1+2*T1+C1)*Math.pow(D,3)/6+(5-2*C1+28*T1-3*C1*C1+8*ep2+24*T1*T1)*Math.pow(D,5)/120)/cosfp;
-  return {lat:lat*180/Math.PI,lng:lon*180/Math.PI};
-}
-function localToLatLng(mx,my){
-  const dx=(mx-cfg.anchorModelX)*cfg.scaleX, dy=(my-cfg.anchorModelY)*cfg.scaleY, th=cfg.rotation*Math.PI/180;
-  const east=dx*Math.cos(th)+dy*Math.sin(th), north=-dx*Math.sin(th)+dy*Math.cos(th);
-  const latRad=cfg.anchorLat*Math.PI/180;
-  return {lat:cfg.anchorLat+north/EARTH_R*180/Math.PI,lng:cfg.anchorLng+east/(EARTH_R*Math.cos(latRad))*180/Math.PI};
-}
-function inferModeFor(mx,my){
-  const selected=document.getElementById('coordMode')?.value || cfg.crs || 'auto';
-  if(selected!=='auto') return selected;
-  const {E,N}=axisEN(mx,my);
-  // Typical Norwegian projected northing range. Pick UTM zone from approximate longitude if possible,
-  // otherwise default to UTM32 for mainland eastings in normal UTM range.
-  if(E>100000 && E<900000 && N>6300000 && N<8900000) return 'utm32';
-  if(E>50000 && E<150000 && N>6300000 && N<8900000) return 'ntm10';
-  return 'local';
-}
-function modelToLatLng(mx,my){
-  const mode=inferModeFor(mx,my);
-  if(mode==='local') return localToLatLng(mx,my);
-  const def=getCRS(mode);
-  if(def.type==='utm' || def.type==='ntm'){
-    const {E,N}=axisEN(mx,my);
-    return projectedToLatLng(E,N,def);
-  }
-  return localToLatLng(mx,my);
-}
-function headingTrue(){
-  const mode=inferModeFor(camPos.x,camPos.y);
-  const modelHeading=Math.atan2(camDir.x,camDir.y)*180/Math.PI;
-  const add=(mode==='local')?cfg.rotation:0;
-  return (modelHeading+add+360)%360;
-}
-function loadGoogleMaps(){
-  return new Promise((resolve,reject)=>{
-    if(gmapsLoaded || window.google?.maps){gmapsLoaded=true;resolve();return}
-    window.__gmapsCB=()=>{gmapsLoaded=true;resolve()};
-    window.gm_authFailure=()=>{setStatus('error','Google API-feil');toast('Google Maps API-nøkkel mangler/er ugyldig');};
-    const s=document.createElement('script');
-    const key=cfg.apiKey?`&key=${encodeURIComponent(cfg.apiKey)}`:'';
-    s.src=`https://maps.googleapis.com/maps/api/js?callback=__gmapsCB${key}&v=weekly`;
-    s.async=true;s.onerror=()=>reject(new Error('Kunne ikke laste Google Maps'));
-    document.head.appendChild(s);
-    setTimeout(()=>{ if(!gmapsLoaded && !window.google?.maps) reject(new Error('Google Maps timeout')); }, 9000);
-  });
-}
-function initMap(){
-  gmap=new google.maps.Map(document.getElementById('gmap'),{center:{lat:cfg.anchorLat,lng:cfg.anchorLng},zoom:18,mapTypeId:'hybrid',disableDefaultUI:true,gestureHandling:'greedy',keyboardShortcuts:false});
-  google.maps.event.addListener(gmap,'dragstart',()=>{followCamera=false;document.getElementById('followBtn').classList.remove('active')});
-  document.getElementById('zoomIn').onclick=()=>gmap.setZoom(gmap.getZoom()+1);
-  document.getElementById('zoomOut').onclick=()=>gmap.setZoom(gmap.getZoom()-1);
-  document.getElementById('resetView').onclick=fitAll;
-  setStatus('live','Kart klart');
-}
-
-function normBox(b){
-  if(!b) return null;
-  if(Array.isArray(b)&&b.length>=2) return normBox({min:b[0],max:b[1]});
-  const min=b.min||b.minimum||b.minPoint||b.Min||b.boxMin||b.lower;
-  const max=b.max||b.maximum||b.maxPoint||b.Max||b.boxMax||b.upper;
-  if(!min||!max) return null;
-  const o={minX:+(min.x??min.X),minY:+(min.y??min.Y),minZ:+(min.z??min.Z??0),maxX:+(max.x??max.X),maxY:+(max.y??max.Y),maxZ:+(max.z??max.Z??0)};
-  return [o.minX,o.minY,o.maxX,o.maxY].every(Number.isFinite)&&Math.abs(o.maxX-o.minX)>0.01&&Math.abs(o.maxY-o.minY)>0.01?o:null;
-}
-async function tryCall(fn){try{const r=await fn();return r}catch(e){return null}}
-async function tryBox(id){
-  const calls=[
-    ()=>API.viewer?.getObjectBoundingBox?.(id),
-    ()=>API.viewer?.getModelBoundingBox?.(id),
-    ()=>API.viewer?.getBoundingBox?.(id),
-    ()=>API.viewer?.models?.getBoundingBox?.(id),
-    ()=>API.models?.getBoundingBox?.(id),
-    ()=>API.viewer?.getObjectRuntimeIds?.(id).then(ids=>API.viewer?.getObjectBoundingBox?.(ids))
-  ];
-  for(const c of calls){const b=normBox(await tryCall(c)); if(b) return b}
-  return null;
-}
-async function getRawModels(){
-  const calls=[()=>API.viewer?.getModels?.(),()=>API.viewer?.models?.getModels?.(),()=>API.models?.getModels?.(),()=>API.project?.getModels?.(),()=>API.project?.models?.getModels?.()];
-  for(const c of calls){
-    const r=await tryCall(c);
-    if(Array.isArray(r)) return r;
-    if(Array.isArray(r?.models)) return r.models;
-    if(Array.isArray(r?.data)) return r.data;
-    if(Array.isArray(r?.items)) return r.items;
-  }
-  return [];
-}
-async function loadModels(){
-  if(!API){toast('Trimble API er ikke klar');return}
-  setStatus('', 'Henter modeller…');
-  const sel=document.getElementById('modelSelector'); sel.innerHTML='<option value="__all__">Alle modeller</option>'; models=[];
-  const raw=await getRawModels();
-  for(const item of raw){
-    const id=item.id??item.modelId??item.guid??item.identifier??item.runtimeId;
-    const name=item.name??item.fileName??item.filename??item.title??String(id);
-    if(id==null) continue;
-    const bbox=normBox(item.boundingBox||item.bbox||item.bounds||item.extents)||await tryBox(id);
-    models.push({id:String(id),name,bbox});
-    const opt=document.createElement('option'); opt.value=String(id); opt.textContent=bbox?name:`${name} (mangler omriss)`; sel.appendChild(opt);
-  }
-  document.getElementById('modelCount').textContent=`${models.length} filer`;
-  drawModels(); fitAll(); setStatus(models.some(m=>m.bbox)?'live':'warn', models.some(m=>m.bbox)?'Modeller lastet':'Mangler modell-omriss');
-  if(!models.some(m=>m.bbox)) toast('Trimble returnerer ikke bounding box. Minikartet kan fortsatt følge kamera.');
-}
-function visibleModels(){return models.filter(m=>m.bbox && (!document.getElementById('onlySelected').checked || selectedModelId==='__all__' || m.id===selectedModelId));}
-function drawModels(){
-  modelOverlays.forEach(o=>o.setMap(null)); modelOverlays=[];
-  if(!gmap || !document.getElementById('showModels').checked) return;
-  visibleModels().forEach((m,i)=>{
-    const b=m.bbox, sel=m.id===selectedModelId;
-    const pts=[{x:b.minX,y:b.minY},{x:b.maxX,y:b.minY},{x:b.maxX,y:b.maxY},{x:b.minX,y:b.maxY}].map(p=>modelToLatLng(p.x,p.y));
-    const poly=new google.maps.Polygon({paths:pts,map:gmap,strokeColor:sel?'#00d4ff':'#3aa6ff',strokeOpacity:sel?1:.7,strokeWeight:sel?3:1.6,fillColor:sel?'#00d4ff':'#3aa6ff',fillOpacity:sel?.18:.08,clickable:false,zIndex:2+i});
-    modelOverlays.push(poly);
-    const c=modelToLatLng((b.minX+b.maxX)/2,(b.minY+b.maxY)/2);
-    const marker=new google.maps.Marker({position:c,map:gmap,label:{text:m.name.slice(0,28),color:sel?'#00d4ff':'#ffffff',fontSize:'10px',fontWeight:'700'},icon:{path:google.maps.SymbolPath.CIRCLE,scale:0},clickable:false,zIndex:20+i});
-    modelOverlays.push(marker);
-  });
-}
-function boundsFor(ms){
-  const bounds=new google.maps.LatLngBounds();
-  ms.forEach(m=>{const b=m.bbox;[{x:b.minX,y:b.minY},{x:b.maxX,y:b.minY},{x:b.maxX,y:b.maxY},{x:b.minX,y:b.maxY}].forEach(p=>bounds.extend(modelToLatLng(p.x,p.y)))});
-  return bounds;
-}
-function fitAll(){
-  if(!gmap) return;
-  let ms=visibleModels();
-  if(selectedModelId!=='__all__'){const m=models.find(x=>x.id===selectedModelId&&x.bbox); if(m) ms=[m];}
-  if(ms.length){gmap.fitBounds(boundsFor(ms),48); return}
-  if(hasCamera){const ll=modelToLatLng(camPos.x,camPos.y);gmap.setCenter(ll);gmap.setZoom(19)}
-}
-function buildCameraIcon(bearing){
-  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="42" height="42" viewBox="-21 -21 42 42"><circle r="11" fill="#00d4ff" fill-opacity=".25" stroke="#00d4ff" stroke-width="1.8"/><polygon points="0,-16 8,8 0,4 -8,8" fill="#00d4ff" stroke="#06131c" stroke-width="1.6" transform="rotate(${bearing})"/></svg>`;
-  return {url:'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent(svg),scaledSize:new google.maps.Size(42,42),anchor:new google.maps.Point(21,21)};
-}
-function offsetLatLng(lat,lng,bearing,dist){
-  const br=bearing*Math.PI/180, latR=lat*Math.PI/180;
-  return {lat:lat+(dist*Math.cos(br))/EARTH_R*180/Math.PI,lng:lng+(dist*Math.sin(br))/(EARTH_R*Math.cos(latR))*180/Math.PI};
-}
-function updateCameraMap(){
-  if(!gmap||!hasCamera) return;
-  const ll=modelToLatLng(camPos.x,camPos.y), bearing=headingTrue(), pos=new google.maps.LatLng(ll.lat,ll.lng);
-  if(!cameraMarker){cameraMarker=new google.maps.Marker({position:pos,map:gmap,icon:buildCameraIcon(bearing),clickable:false,zIndex:100});}
-  else{cameraMarker.setPosition(pos);cameraMarker.setIcon(buildCameraIcon(bearing));}
-  if(fovPolygon){fovPolygon.setMap(null);fovPolygon=null}
-  if(document.getElementById('showFOV').checked){
-    const range=Math.max(20, metersPerModelViewRange()*0.12), fov=60;
-    fovPolygon=new google.maps.Polygon({paths:[ll,offsetLatLng(ll.lat,ll.lng,bearing-fov/2,range),offsetLatLng(ll.lat,ll.lng,bearing,range*1.15),offsetLatLng(ll.lat,ll.lng,bearing+fov/2,range)],map:gmap,strokeColor:'#00d4ff',strokeOpacity:.55,strokeWeight:1,fillColor:'#00d4ff',fillOpacity:.14,clickable:false,zIndex:50});
-  }
-  updateTrail();
-  document.getElementById('valLat').textContent=ll.lat.toFixed(6);document.getElementById('valLng').textContent=ll.lng.toFixed(6);document.getElementById('valDir').textContent=Math.round(bearing)+'°';document.getElementById('levelBadge').textContent='Z: '+camPos.z.toFixed(1)+' m';
-  document.getElementById('compassNeedle').setAttribute('transform',`rotate(${bearing},24,24)`);document.getElementById('compassNeedleS').setAttribute('transform',`rotate(${bearing},24,24)`);
-  if(followCamera) gmap.panTo(pos);
-}
-function metersPerModelViewRange(){
-  const ms=models.filter(m=>m.bbox); if(!ms.length) return 80;
-  let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity; ms.forEach(m=>{const b=m.bbox;minX=Math.min(minX,b.minX);minY=Math.min(minY,b.minY);maxX=Math.max(maxX,b.maxX);maxY=Math.max(maxY,b.maxY)});
-  return Math.hypot(maxX-minX,maxY-minY)||80;
-}
-function updateTrail(){
-  if(trailPolyline){trailPolyline.setMap(null);trailPolyline=null}
-  if(!gmap||!document.getElementById('showTrail').checked||trail.length<2) return;
-  trailPolyline=new google.maps.Polyline({path:trail.map(p=>modelToLatLng(p.x,p.y)),map:gmap,strokeColor:'#00d4ff',strokeOpacity:.4,strokeWeight:2.5,clickable:false,zIndex:40});
-}
-function onCameraUpdate(pos,dir){
-  if(!pos) return;
-  camPos={x:+(pos.x??pos.X??0),y:+(pos.y??pos.Y??0),z:+(pos.z??pos.Z??0)};
-  if(dir){camDir={x:+(dir.x??dir.X??0),y:+(dir.y??dir.Y??1),z:+(dir.z??dir.Z??0)};const L=Math.hypot(camDir.x,camDir.y,camDir.z)||1;camDir.x/=L;camDir.y/=L;camDir.z/=L}
-  hasCamera=true; trail.push({x:camPos.x,y:camPos.y}); if(trail.length>MAX_TRAIL)trail.shift();
-  setStatus('live','Live'); updateCameraMap();
-}
-function vFromTo(a,b){if(!a||!b)return null;return{x:(b.x??b.X??0)-(a.x??a.X??0),y:(b.y??b.Y??0)-(a.y??a.Y??0),z:(b.z??b.Z??0)-(a.z??a.Z??0)}}
-function parseCamera(cam){if(!cam)return; const pos=cam.position??cam.eye??cam.cameraPosition??cam.location; const dir=cam.direction??cam.viewDirection??(cam.target||cam.lookAt?vFromTo(cam.eye??cam.position,cam.target??cam.lookAt):null); onCameraUpdate(pos,dir)}
-async function pollCamera(){const calls=[()=>API.viewer?.getCamera?.(),()=>API.viewer?.camera?.getCamera?.(),()=>API.viewer?.getView?.()]; for(const c of calls){const cam=await tryCall(c); if(cam){parseCamera(cam.camera??cam); return}}}
-function startCameraPolling(){clearInterval(pollTimer); pollTimer=setInterval(pollCamera,500); pollCamera();}
-async function initTrimble(){
-  try{
-    API=await TrimbleConnectWorkspace.connect(window.parent,async(event,args)=>{
-      if(String(event).toLowerCase().includes('camera')||String(event).toLowerCase().includes('view')){
-        const d=args?.data??args?.camera??args; const pos=d?.position??d?.eye??d?.cameraPosition??d?.location; const dir=d?.direction??d?.viewDirection??(d?.target||d?.lookAt?vFromTo(d.eye??d.position,d.target??d.lookAt):null); onCameraUpdate(pos,dir);
-      }
-      if(String(event).toLowerCase().includes('model')) setTimeout(loadModels,500);
-    });
-    setStatus('live','Trimble tilkoblet');
-    await tryCall(()=>API.viewer?.subscribeToCamera?.()); await tryCall(()=>API.viewer?.enableCameraEvents?.()); await tryCall(()=>API.viewer?.addEventListener?.('cameraChanged',()=>pollCamera()));
-    startCameraPolling();
-    setTimeout(loadModels,800);
-  }catch(e){console.error(e);setStatus('error','Trimble ikke tilkoblet');toast('Trimble Connect API ikke tilgjengelig');}
-}
-function readCfg(){try{Object.assign(cfg,JSON.parse(localStorage.getItem('tc_minimap_google_v9')||localStorage.getItem('tc_minimap_google_v8')||'{}'))}catch(e){}; populateCRS(); ['MX','MY','Lat','Lng','ScaleX','ScaleY','Rotation','ApiKey'].forEach(k=>{const el=document.getElementById('cfg'+k); if(!el)return; const prop={MX:'anchorModelX',MY:'anchorModelY',Lat:'anchorLat',Lng:'anchorLng',ScaleX:'scaleX',ScaleY:'scaleY',Rotation:'rotation',ApiKey:'apiKey'}[k]; el.value=cfg[prop]??''}); const cm=document.getElementById('coordMode'); if(cm) cm.value=cfg.crs||'auto'; const ax=document.getElementById('axisOrder'); if(ax) ax.value=cfg.axisOrder||'xy';}
-function saveCfg(){cfg.anchorModelX=parseFloat(cfgMX.value)||0;cfg.anchorModelY=parseFloat(cfgMY.value)||0;cfg.anchorLat=parseFloat(cfgLat.value)||59.7380059;cfg.anchorLng=parseFloat(cfgLng.value)||10.2107246;cfg.scaleX=parseFloat(cfgScaleX.value)||1;cfg.scaleY=parseFloat(cfgScaleY.value)||1;cfg.rotation=parseFloat(cfgRotation.value)||0;cfg.apiKey=cfgApiKey.value.trim();cfg.crs=document.getElementById('coordMode')?.value||'auto';cfg.axisOrder=document.getElementById('axisOrder')?.value||'xy';localStorage.setItem('tc_minimap_google_v9',JSON.stringify(cfg));setupPanel.classList.remove('show');toast('Koordinatsystem/kalibrering lagret'); if(gmap){drawModels();updateCameraMap();fitAll();}}
-
-document.getElementById('refreshModels').onclick=loadModels;
-document.getElementById('zoomModel').onclick=fitAll;
-document.getElementById('centerCamera').onclick=()=>{if(hasCamera&&gmap){gmap.panTo(modelToLatLng(camPos.x,camPos.y));gmap.setZoom(Math.max(gmap.getZoom(),19))}};
-document.getElementById('followBtn').onclick=e=>{followCamera=!followCamera;e.currentTarget.classList.toggle('active',followCamera); if(followCamera) document.getElementById('centerCamera').click()};
-document.getElementById('modelSelector').onchange=e=>{selectedModelId=e.target.value;drawModels();fitAll()};
-document.getElementById('coordMode').onchange=()=>{cfg.crs=document.getElementById('coordMode').value; drawModels();updateCameraMap();fitAll()};
-document.getElementById('axisOrder').onchange=()=>{cfg.axisOrder=document.getElementById('axisOrder').value; drawModels();updateCameraMap();fitAll()};
-['showModels','showTrail','showFOV','onlySelected'].forEach(id=>document.getElementById(id).onchange=()=>{drawModels();updateCameraMap();});
-document.getElementById('configBtn').onclick=()=>setupPanel.classList.add('show');
-document.getElementById('closeCfg').onclick=()=>setupPanel.classList.remove('show');
-document.getElementById('saveCfg').onclick=saveCfg;
-
-(async function boot(){
-  readCfg(); setStatus('', 'Laster kart…');
-  try{await loadGoogleMaps();initMap();}catch(e){console.error(e);setStatus('error','Kartfeil');toast('Google Maps kunne ikke lastes. Kontroller API-nøkkel.')}
-  await initTrimble();
-})();
+let API=null,gmap=null,kartLayer=null;let camPos={x:0,y:0,z:0},camDir={x:0,y:1,z:0},hasCamera=false,followCamera=true;let trail=[],MAX_TRAIL=500,models=[],selectedModelId='__all__';let cameraMarker=null,fovLayer=null,trailLayer=null,modelLayers=[],pollTimer=null;let cfg={anchorModelX:0,anchorModelY:0,anchorLat:59.7380059,anchorLng:10.2107246,scaleX:1,scaleY:1,rotation:0,crs:'utm33',axisOrder:'xy'};const EARTH_R=6378137;
+function setStatus(type,text){statusDot.className='status-dot'+(type?' '+type:'');statusText.textContent=text}function toast(msg,dur=2400){toastEl=document.getElementById('toast');toastEl.textContent=msg;toastEl.classList.add('show');setTimeout(()=>toastEl.classList.remove('show'),dur)}
+const CRS_DEFS=(()=>{const defs=[{id:'auto',name:'Auto – prøv å tolke koordinater'},{id:'local',name:'Lokal kalibrering'}];for(let z=31;z<=36;z++)defs.push({id:`utm${z}`,name:`EUREF89 UTM sone ${z} + NN2000`,type:'utm',zone:z,epsg2d:25800+z,falseE:500000,k0:.9996,lon0:z*6-183});for(let z=5;z<=30;z++)defs.push({id:`ntm${z}`,name:`EUREF89 NTM sone ${z} + NN2000`,type:'ntm',zone:z,falseE:100000,k0:1,lon0:z});return defs})();
+function fillCRS(sel){sel.innerHTML='';let groups={auto:document.createElement('optgroup'),utm:document.createElement('optgroup'),ntm:document.createElement('optgroup')};groups.auto.label='Auto / lokal';groups.utm.label='EUREF89 UTM + NN2000';groups.ntm.label='EUREF89 NTM + NN2000';CRS_DEFS.forEach(d=>{const o=document.createElement('option');o.value=d.id;o.textContent=d.name+(d.epsg2d?` / EPSG:${d.epsg2d}`:'');groups[d.type||'auto'].appendChild(o)});sel.append(groups.auto,groups.utm,groups.ntm)}function getCRS(id){return CRS_DEFS.find(d=>d.id===id)||CRS_DEFS[0]}function axisEN(mx,my){const order=cfg.axisOrder||'xy';return order==='yx'?{E:+my,N:+mx}:{E:+mx,N:+my}}
+function projectedToLatLng(E,N,def){const a=6378137,f=1/298.257222101,e2=f*(2-f),ep2=e2/(1-e2),e1=(1-Math.sqrt(1-e2))/(1+Math.sqrt(1-e2));const k0=def.k0,x=E-def.falseE,y=N,lon0=def.lon0*Math.PI/180;const M=y/k0,mu=M/(a*(1-e2/4-3*e2*e2/64-5*e2*e2*e2/256));const J1=3*e1/2-27*Math.pow(e1,3)/32,J2=21*Math.pow(e1,2)/16-55*Math.pow(e1,4)/32,J3=151*Math.pow(e1,3)/96,J4=1097*Math.pow(e1,4)/512;const fp=mu+J1*Math.sin(2*mu)+J2*Math.sin(4*mu)+J3*Math.sin(6*mu)+J4*Math.sin(8*mu);const sinfp=Math.sin(fp),cosfp=Math.cos(fp),tanfp=Math.tan(fp),C1=ep2*cosfp*cosfp,T1=tanfp*tanfp,R1=a*(1-e2)/Math.pow(1-e2*sinfp*sinfp,1.5),N1=a/Math.sqrt(1-e2*sinfp*sinfp),D=x/(N1*k0);const lat=fp-(N1*tanfp/R1)*(D*D/2-(5+3*T1+10*C1-4*C1*C1-9*ep2)*Math.pow(D,4)/24+(61+90*T1+298*C1+45*T1*T1-252*ep2-3*C1*C1)*Math.pow(D,6)/720);const lon=lon0+(D-(1+2*T1+C1)*Math.pow(D,3)/6+(5-2*C1+28*T1-3*C1*C1+8*ep2+24*T1*T1)*Math.pow(D,5)/120)/cosfp;return L.latLng(lat*180/Math.PI,lon*180/Math.PI)}
+function localToLatLng(mx,my){const dx=(mx-cfg.anchorModelX)*cfg.scaleX,dy=(my-cfg.anchorModelY)*cfg.scaleY,th=cfg.rotation*Math.PI/180;const east=dx*Math.cos(th)+dy*Math.sin(th),north=-dx*Math.sin(th)+dy*Math.cos(th),latRad=cfg.anchorLat*Math.PI/180;return L.latLng(cfg.anchorLat+north/EARTH_R*180/Math.PI,cfg.anchorLng+east/(EARTH_R*Math.cos(latRad))*180/Math.PI)}
+function inferModeFor(mx,my){if(cfg.crs!=='auto')return cfg.crs;const{E,N}=axisEN(mx,my);if(E>100000&&E<900000&&N>6300000&&N<8900000)return'utm33';if(E>50000&&E<150000&&N>6300000&&N<8900000)return'ntm10';return'local'}function modelToLatLng(mx,my){const mode=inferModeFor(mx,my);if(mode==='local')return localToLatLng(mx,my);const def=getCRS(mode);if(def.type==='utm'||def.type==='ntm'){const{E,N}=axisEN(mx,my);return projectedToLatLng(E,N,def)}return localToLatLng(mx,my)}function headingTrue(){const mode=inferModeFor(camPos.x,camPos.y),h=Math.atan2(camDir.x,camDir.y)*180/Math.PI;return(h+(mode==='local'?cfg.rotation:0)+360)%360}
+function initMap(){let center=projectedToLatLng(396722,7197860,getCRS('utm33'));try{if(cfg.crs!=='local')center=modelToLatLng(396722,7197860);else center=L.latLng(cfg.anchorLat,cfg.anchorLng)}catch(e){}gmap=L.map('gmap',{zoomControl:false,attributionControl:true,preferCanvas:true}).setView(center,15);setKartLayer(mapLayer.value||'topo');gmap.on('dragstart',()=>{followCamera=false;followBtn.classList.remove('active')});zoomIn.onclick=()=>gmap.zoomIn();zoomOut.onclick=()=>gmap.zoomOut();resetView.onclick=fitAll;setStatus('live','Kartverket klart')}
+function setKartLayer(layer){if(!gmap)return;if(kartLayer)gmap.removeLayer(kartLayer);kartLayer=L.tileLayer(`https://cache.kartverket.no/v1/wmts/1.0.0/${layer}/default/webmercator/{z}/{y}/{x}.png`,{maxZoom:20,attribution:'© Kartverket'}).addTo(gmap)}
+function normBox(b){if(!b)return null;if(Array.isArray(b)&&b.length>=2)return normBox({min:b[0],max:b[1]});const min=b.min||b.minimum||b.minPoint||b.Min||b.boxMin||b.lower,max=b.max||b.maximum||b.maxPoint||b.Max||b.boxMax||b.upper;if(!min||!max)return null;const o={minX:+(min.x??min.X),minY:+(min.y??min.Y),minZ:+(min.z??min.Z??0),maxX:+(max.x??max.X),maxY:+(max.y??max.Y),maxZ:+(max.z??max.Z??0)};return[o.minX,o.minY,o.maxX,o.maxY].every(Number.isFinite)&&Math.abs(o.maxX-o.minX)>0.01&&Math.abs(o.maxY-o.minY)>0.01?o:null}async function tryCall(fn){try{return await fn()}catch(e){return null}}async function tryBox(id){const calls=[()=>API.viewer?.getObjectBoundingBox?.(id),()=>API.viewer?.getModelBoundingBox?.(id),()=>API.viewer?.getBoundingBox?.(id),()=>API.viewer?.models?.getBoundingBox?.(id),()=>API.models?.getBoundingBox?.(id),()=>API.viewer?.getObjectRuntimeIds?.(id).then(ids=>API.viewer?.getObjectBoundingBox?.(ids))];for(const c of calls){const b=normBox(await tryCall(c));if(b)return b}return null}async function getRawModels(){const calls=[()=>API.viewer?.getModels?.(),()=>API.viewer?.models?.getModels?.(),()=>API.models?.getModels?.(),()=>API.project?.getModels?.(),()=>API.project?.models?.getModels?.()];for(const c of calls){const r=await tryCall(c);if(Array.isArray(r))return r;if(Array.isArray(r?.models))return r.models;if(Array.isArray(r?.data))return r.data;if(Array.isArray(r?.items))return r.items}return[]}
+async function loadModels(){if(!API){toast('Trimble API er ikke klar');return}setStatus('','Henter modeller…');modelSelector.innerHTML='<option value="__all__">Alle modeller</option>';models=[];const raw=await getRawModels();for(const item of raw){const id=item.id??item.modelId??item.guid??item.identifier??item.runtimeId,name=item.name??item.fileName??item.filename??item.title??String(id);if(id==null)continue;const bbox=normBox(item.boundingBox||item.bbox||item.bounds||item.extents)||await tryBox(id);models.push({id:String(id),name,bbox});const opt=document.createElement('option');opt.value=String(id);opt.textContent=bbox?name:`${name} (mangler omriss)`;modelSelector.appendChild(opt)}modelCount.textContent=`${models.length} filer`;drawModels();fitAll();setStatus(models.some(m=>m.bbox)?'live':'warn',models.some(m=>m.bbox)?'Modeller lastet':'Mangler modell-omriss');if(!models.some(m=>m.bbox))toast('Trimble returnerer ikke bounding box. Minikartet kan fortsatt følge kamera.')}
+function visibleModels(){return models.filter(m=>m.bbox&&(!onlySelected.checked||selectedModelId==='__all__'||m.id===selectedModelId))}function clearModelLayers(){modelLayers.forEach(l=>gmap.removeLayer(l));modelLayers=[]}function drawModels(){if(!gmap)return;clearModelLayers();if(!showModels.checked)return;visibleModels().forEach((m,i)=>{const b=m.bbox,sel=m.id===selectedModelId;const pts=[{x:b.minX,y:b.minY},{x:b.maxX,y:b.minY},{x:b.maxX,y:b.maxY},{x:b.minX,y:b.maxY}].map(p=>modelToLatLng(p.x,p.y));const poly=L.polygon(pts,{color:sel?'#00d4ff':'#3aa6ff',weight:sel?3:1.6,opacity:sel?1:.75,fillColor:sel?'#00d4ff':'#3aa6ff',fillOpacity:sel?.18:.08,interactive:false}).addTo(gmap);modelLayers.push(poly);const c=modelToLatLng((b.minX+b.maxX)/2,(b.minY+b.maxY)/2);const lab=L.marker(c,{icon:L.divIcon({className:'',html:`<div class="model-label ${sel?'selected':''}">${String(m.name).slice(0,28)}</div>`,iconSize:[160,14],iconAnchor:[80,7]}),interactive:false}).addTo(gmap);modelLayers.push(lab)})}function boundsFor(ms){const group=[];ms.forEach(m=>{const b=m.bbox;[{x:b.minX,y:b.minY},{x:b.maxX,y:b.minY},{x:b.maxX,y:b.maxY},{x:b.minX,y:b.maxY}].forEach(p=>group.push(modelToLatLng(p.x,p.y))) });return L.latLngBounds(group)}function fitAll(){if(!gmap)return;let ms=visibleModels();if(selectedModelId!=='__all__'){const m=models.find(x=>x.id===selectedModelId&&x.bbox);if(m)ms=[m]}if(ms.length){gmap.fitBounds(boundsFor(ms),{padding:[48,48],maxZoom:20});return}if(hasCamera){gmap.setView(modelToLatLng(camPos.x,camPos.y),Math.max(gmap.getZoom(),19))}}
+function cameraIcon(bearing){return L.divIcon({className:'',html:`<div class="cam-icon"><div class="ring"></div><div class="arrow" style="transform:rotate(${bearing}deg)"></div></div>`,iconSize:[42,42],iconAnchor:[21,21]})}function offsetLatLng(lat,lng,bearing,dist){const br=bearing*Math.PI/180,latR=lat*Math.PI/180;return L.latLng(lat+(dist*Math.cos(br))/EARTH_R*180/Math.PI,lng+(dist*Math.sin(br))/(EARTH_R*Math.cos(latR))*180/Math.PI)}function metersPerModelViewRange(){const ms=models.filter(m=>m.bbox);if(!ms.length)return 80;let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;ms.forEach(m=>{const b=m.bbox;minX=Math.min(minX,b.minX);minY=Math.min(minY,b.minY);maxX=Math.max(maxX,b.maxX);maxY=Math.max(maxY,b.maxY)});return Math.hypot(maxX-minX,maxY-minY)||80}
+function updateTrail(){if(trailLayer){gmap.removeLayer(trailLayer);trailLayer=null}if(!gmap||!showTrail.checked||trail.length<2)return;trailLayer=L.polyline(trail.map(p=>modelToLatLng(p.x,p.y)),{color:'#00d4ff',opacity:.42,weight:2.5,interactive:false}).addTo(gmap)}function updateCameraMap(){if(!gmap||!hasCamera)return;const ll=modelToLatLng(camPos.x,camPos.y),bearing=headingTrue();if(!cameraMarker)cameraMarker=L.marker(ll,{icon:cameraIcon(bearing),interactive:false,zIndexOffset:1000}).addTo(gmap);else cameraMarker.setLatLng(ll).setIcon(cameraIcon(bearing));if(fovLayer){gmap.removeLayer(fovLayer);fovLayer=null}if(showFOV.checked){const range=Math.max(20,metersPerModelViewRange()*.12),fov=60;fovLayer=L.polygon([ll,offsetLatLng(ll.lat,ll.lng,bearing-fov/2,range),offsetLatLng(ll.lat,ll.lng,bearing,range*1.15),offsetLatLng(ll.lat,ll.lng,bearing+fov/2,range)],{color:'#00d4ff',opacity:.55,weight:1,fillColor:'#00d4ff',fillOpacity:.14,interactive:false}).addTo(gmap)}updateTrail();valLat.textContent=ll.lat.toFixed(6);valLng.textContent=ll.lng.toFixed(6);valDir.textContent=Math.round(bearing)+'°';levelBadge.textContent='NN2000 Z: '+camPos.z.toFixed(1)+' m';compassNeedle.setAttribute('transform',`rotate(${bearing},24,24)`);compassNeedleS.setAttribute('transform',`rotate(${bearing},24,24)`);if(followCamera)gmap.panTo(ll,{animate:false})}
+function onCameraUpdate(pos,dir){if(!pos)return;camPos={x:+(pos.x??pos.X??0),y:+(pos.y??pos.Y??0),z:+(pos.z??pos.Z??0)};if(dir){camDir={x:+(dir.x??dir.X??0),y:+(dir.y??dir.Y??1),z:+(dir.z??dir.Z??0)};const Lh=Math.hypot(camDir.x,camDir.y,camDir.z)||1;camDir.x/=Lh;camDir.y/=Lh;camDir.z/=Lh}hasCamera=true;trail.push({x:camPos.x,y:camPos.y});if(trail.length>MAX_TRAIL)trail.shift();setStatus('live','Live');updateCameraMap()}function vFromTo(a,b){if(!a||!b)return null;return{x:(b.x??b.X??0)-(a.x??a.X??0),y:(b.y??b.Y??0)-(a.y??a.Y??0),z:(b.z??b.Z??0)-(a.z??a.Z??0)}}function parseCamera(cam){if(!cam)return;const pos=cam.position??cam.eye??cam.cameraPosition??cam.location,dir=cam.direction??cam.viewDirection??(cam.target||cam.lookAt?vFromTo(cam.eye??cam.position,cam.target??cam.lookAt):null);onCameraUpdate(pos,dir)}async function pollCamera(){const calls=[()=>API.viewer?.getCamera?.(),()=>API.viewer?.camera?.getCamera?.(),()=>API.viewer?.getView?.()];for(const c of calls){const cam=await tryCall(c);if(cam){parseCamera(cam.camera??cam);return}}}function startCameraPolling(){clearInterval(pollTimer);pollTimer=setInterval(pollCamera,500);pollCamera()}async function initTrimble(){try{API=await TrimbleConnectWorkspace.connect(window.parent,async(event,args)=>{const ev=String(event).toLowerCase();if(ev.includes('camera')||ev.includes('view')){const d=args?.data??args?.camera??args;const pos=d?.position??d?.eye??d?.cameraPosition??d?.location,dir=d?.direction??d?.viewDirection??(d?.target||d?.lookAt?vFromTo(d.eye??d.position,d.target??d.lookAt):null);onCameraUpdate(pos,dir)}if(ev.includes('model'))setTimeout(loadModels,500)});setStatus('live','Trimble tilkoblet');await tryCall(()=>API.viewer?.subscribeToCamera?.());await tryCall(()=>API.viewer?.enableCameraEvents?.());startCameraPolling();setTimeout(loadModels,800)}catch(e){console.error(e);setStatus('error','Trimble ikke tilkoblet');toast('Trimble Connect API ikke tilgjengelig')}}
+function readCfg(){try{Object.assign(cfg,JSON.parse(localStorage.getItem('tc_minimap_kartverket_v10')||localStorage.getItem('tc_minimap_google_v9')||'{}'))}catch(e){};fillCRS(coordMode);fillCRS(cfgCRS);coordMode.value=cfg.crs||'utm33';cfgCRS.value=cfg.crs||'utm33';axisOrder.value=cfg.axisOrder||'xy';cfgAxis.value=cfg.axisOrder||'xy';cfgMX.value=cfg.anchorModelX??0;cfgMY.value=cfg.anchorModelY??0;cfgLat.value=cfg.anchorLat??59.7380059;cfgLng.value=cfg.anchorLng??10.2107246;cfgScaleX.value=cfg.scaleX??1;cfgScaleY.value=cfg.scaleY??1;cfgRotation.value=cfg.rotation??0}function saveCfg(){cfg.crs=cfgCRS.value;cfg.axisOrder=cfgAxis.value;cfg.anchorModelX=parseFloat(cfgMX.value)||0;cfg.anchorModelY=parseFloat(cfgMY.value)||0;cfg.anchorLat=parseFloat(cfgLat.value)||59.7380059;cfg.anchorLng=parseFloat(cfgLng.value)||10.2107246;cfg.scaleX=parseFloat(cfgScaleX.value)||1;cfg.scaleY=parseFloat(cfgScaleY.value)||1;cfg.rotation=parseFloat(cfgRotation.value)||0;localStorage.setItem('tc_minimap_kartverket_v10',JSON.stringify(cfg));coordMode.value=cfg.crs;axisOrder.value=cfg.axisOrder;setupPanel.classList.remove('show');toast('Koordinatsystem lagret');drawModels();updateCameraMap();fitAll()}
+refreshModels.onclick=loadModels;zoomModel.onclick=fitAll;centerCamera.onclick=()=>{if(hasCamera&&gmap)gmap.setView(modelToLatLng(camPos.x,camPos.y),Math.max(gmap.getZoom(),19))};followBtn.onclick=e=>{followCamera=!followCamera;e.currentTarget.classList.toggle('active',followCamera);if(followCamera)centerCamera.click()};modelSelector.onchange=e=>{selectedModelId=e.target.value;drawModels();fitAll()};coordMode.onchange=()=>{cfg.crs=coordMode.value;cfgCRS.value=cfg.crs;drawModels();updateCameraMap();fitAll()};axisOrder.onchange=()=>{cfg.axisOrder=axisOrder.value;cfgAxis.value=cfg.axisOrder;drawModels();updateCameraMap();fitAll()};mapLayer.onchange=()=>setKartLayer(mapLayer.value);['showModels','showTrail','showFOV','onlySelected'].forEach(id=>document.getElementById(id).onchange=()=>{drawModels();updateCameraMap()});configBtn.onclick=()=>setupPanel.classList.add('show');closeCfg.onclick=()=>setupPanel.classList.remove('show');saveCfg.onclick=saveCfg;
+(async function boot(){readCfg();setStatus('','Laster Kartverket…');initMap();await initTrimble()})();
 </script>
 </body>
 </html>
