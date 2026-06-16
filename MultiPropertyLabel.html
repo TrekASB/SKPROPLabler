@@ -2,7 +2,7 @@
 <html lang="nb">
 <head>
   <meta charset="UTF-8"/>
-  <title>MiniMap – Kartverket/Google ortofoto – NTM/UTM V19 – Trimble Connect</title>
+  <title>MiniMap – Kartverket/Google ortofoto – NTM/UTM V20 – Trimble Connect</title>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <link href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" rel="stylesheet"/>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -45,6 +45,15 @@
 <div class="info-bar"><div class="info-cell"><span class="info-label">Lat</span><span class="info-value" id="valLat">–</span></div><div class="info-cell"><span class="info-label">Lng</span><span class="info-value" id="valLng">–</span></div><div class="info-cell"><span class="info-label">Retning</span><span class="info-value" id="valDir">–°</span></div></div>
 <script>
 let API=null,gmap=null,kartLayer=null;let camPos={x:0,y:0,z:0},camDir={x:0,y:1,z:0},hasCamera=false,followCamera=true;let trail=[],MAX_TRAIL=500,models=[],selectedModelId='__all__';let cameraMarker=null,fovLayer=null,trailLayer=null,modelLayers=[],contourLayers=[],pollTimer=null;let cfg={anchorModelX:0,anchorModelY:0,anchorLat:59.7380059,anchorLng:10.2107246,scaleX:1,scaleY:1,rotation:0,crs:'utm33',axisOrder:'xy'};const EARTH_R=6378137;
+
+// Robust DOM references. Trimble Connect/iframe environments do not always
+// expose element IDs as global variables, so every control is bound explicitly.
+const $ = (id) => document.getElementById(id);
+const modelSelector=$('modelSelector'), refreshModels=$('refreshModels'), zoomModel=$('zoomModel'), centerCamera=$('centerCamera'), followBtn=$('followBtn'), clickMoveBtn=$('clickMoveBtn'), configBtn=$('configBtn');
+const mapLayer=$('mapLayer'), coordMode=$('coordMode'), axisOrder=$('axisOrder'), showModels=$('showModels'), onlySelected=$('onlySelected'), showFOV=$('showFOV'), modelCount=$('modelCount');
+const zoomIn=$('zoomIn'), zoomOut=$('zoomOut'), resetView=$('resetView'), setupPanel=$('setupPanel'), cfgCRS=$('cfgCRS'), cfgAxis=$('cfgAxis'), cfgMX=$('cfgMX'), cfgMY=$('cfgMY'), cfgLat=$('cfgLat'), cfgLng=$('cfgLng'), cfgScaleX=$('cfgScaleX'), cfgScaleY=$('cfgScaleY'), cfgRotation=$('cfgRotation'), closeCfg=$('closeCfg'), saveCfgBtn=$('saveCfg');
+const statusDot=$('statusDot'), statusText=$('statusText'), toastEl=$('toast'), valLat=$('valLat'), valLng=$('valLng'), valDir=$('valDir'), levelBadge=$('levelBadge'), compassNeedle=$('compassNeedle'), compassNeedleS=$('compassNeedleS');
+window.addEventListener('error', (e)=>{ try{ setStatus('error','JS-feil: '+(e.message||'ukjent')); }catch(_){} console.error(e.error||e.message); });
 function setStatus(type,text){statusDot.className='status-dot'+(type?' '+type:'');statusText.textContent=text}function toast(msg,dur=2400){toastEl=document.getElementById('toast');toastEl.textContent=msg;toastEl.classList.add('show');setTimeout(()=>toastEl.classList.remove('show'),dur)}
 const CRS_DEFS=(()=>{
   const defs=[{id:'auto',name:'Auto – prøv å tolke koordinater'},{id:'local',name:'Lokal kalibrering'}];
@@ -133,16 +142,16 @@ async function trySetCameraTo(pos){
   const camA={position:newPos,direction:dir,target:target};
   const camB={eye:newPos,target:target,up:{x:0,y:0,z:1}};
   const calls=[
-    ()=>API.viewer?.setCamera?.(camA),
-    ()=>API.viewer?.setCamera?.(camB),
-    ()=>API.viewer?.camera?.setCamera?.(camA),
-    ()=>API.viewer?.setView?.({camera:camA}),
-    ()=>API.viewer?.setView?.({position:newPos,target:target}),
-    ()=>API.viewer?.moveCamera?.(newPos,target),
-    ()=>API.viewer?.lookAt?.(newPos,target)
-  ];
+    API.viewer?.setCamera ? ()=>API.viewer.setCamera(camA) : null,
+    API.viewer?.setCamera ? ()=>API.viewer.setCamera(camB) : null,
+    API.viewer?.camera?.setCamera ? ()=>API.viewer.camera.setCamera(camA) : null,
+    API.viewer?.setView ? ()=>API.viewer.setView({camera:camA}) : null,
+    API.viewer?.setView ? ()=>API.viewer.setView({position:newPos,target:target}) : null,
+    API.viewer?.moveCamera ? ()=>API.viewer.moveCamera(newPos,target) : null,
+    API.viewer?.lookAt ? ()=>API.viewer.lookAt(newPos,target) : null
+  ].filter(Boolean);
   for(const c of calls){
-    try{const r=await c();onCameraUpdate(newPos,dir);toast('Flyttet kamera til valgt punkt');return true}catch(e){}
+    try{await c();onCameraUpdate(newPos,dir);toast('Flyttet kamera til valgt punkt');return true}catch(e){ console.debug('Kameraflytt-metode feilet', e); }
   }
   onCameraUpdate(newPos,dir);
   toast('Punkt markert i minimap. Trimble API tillot ikke kameraflytting.');
@@ -240,9 +249,18 @@ function updateCameraMap(){
   valLat.textContent=ll.lat.toFixed(6);valLng.textContent=ll.lng.toFixed(6);valDir.textContent=Math.round(bearing)+'°';levelBadge.textContent='NN2000 Z: '+camPos.z.toFixed(1)+' m';compassNeedle.setAttribute('transform',`rotate(${bearing},24,24)`);compassNeedleS.setAttribute('transform',`rotate(${bearing},24,24)`);if(followCamera)gmap.panTo(ll,{animate:false})
 }
 function onCameraUpdate(pos,dir){if(!pos)return;camPos={x:+(pos.x??pos.X??0),y:+(pos.y??pos.Y??0),z:+(pos.z??pos.Z??0)};if(dir){camDir={x:+(dir.x??dir.X??0),y:+(dir.y??dir.Y??1),z:+(dir.z??dir.Z??0)};const Lh=Math.hypot(camDir.x,camDir.y,camDir.z)||1;camDir.x/=Lh;camDir.y/=Lh;camDir.z/=Lh}hasCamera=true;trail.push({x:camPos.x,y:camPos.y});if(trail.length>MAX_TRAIL)trail.shift();setStatus('live','Live');updateCameraMap()}function vFromTo(a,b){if(!a||!b)return null;return{x:(b.x??b.X??0)-(a.x??a.X??0),y:(b.y??b.Y??0)-(a.y??a.Y??0),z:(b.z??b.Z??0)-(a.z??a.Z??0)}}function parseCamera(cam){if(!cam)return;const pos=cam.position??cam.eye??cam.cameraPosition??cam.location,dir=cam.direction??cam.viewDirection??(cam.target||cam.lookAt?vFromTo(cam.eye??cam.position,cam.target??cam.lookAt):null);onCameraUpdate(pos,dir)}async function pollCamera(){const calls=[()=>API.viewer?.getCamera?.(),()=>API.viewer?.camera?.getCamera?.(),()=>API.viewer?.getView?.()];for(const c of calls){const cam=await tryCall(c);if(cam){parseCamera(cam.camera??cam);return}}}function startCameraPolling(){clearInterval(pollTimer);pollTimer=setInterval(pollCamera,500);pollCamera()}async function initTrimble(){try{API=await TrimbleConnectWorkspace.connect(window.parent,async(event,args)=>{const ev=String(event).toLowerCase();if(ev.includes('camera')||ev.includes('view')){const d=args?.data??args?.camera??args;const pos=d?.position??d?.eye??d?.cameraPosition??d?.location,dir=d?.direction??d?.viewDirection??(d?.target||d?.lookAt?vFromTo(d.eye??d.position,d.target??d.lookAt):null);onCameraUpdate(pos,dir)}if(ev.includes('model'))setTimeout(loadModels,500)});setStatus('live','Trimble tilkoblet');await tryCall(()=>API.viewer?.subscribeToCamera?.());await tryCall(()=>API.viewer?.enableCameraEvents?.());startCameraPolling();setTimeout(loadModels,800)}catch(e){console.error(e);setStatus('error','Trimble ikke tilkoblet');toast('Trimble Connect API ikke tilgjengelig')}}
-function readCfg(){try{Object.assign(cfg,JSON.parse(localStorage.getItem('tc_minimap_kartverket_v19')||localStorage.getItem('tc_minimap_kartverket_v17')||localStorage.getItem('tc_minimap_kartverket_v14')||localStorage.getItem('tc_minimap_kartverket_v13')||localStorage.getItem('tc_minimap_kartverket_v12')||localStorage.getItem('tc_minimap_kartverket_v11')||localStorage.getItem('tc_minimap_google_v9')||'{}'))}catch(e){};fillCRS(coordMode);fillCRS(cfgCRS);coordMode.value=cfg.crs||'utm33';cfgCRS.value=cfg.crs||'utm33';axisOrder.value=cfg.axisOrder||'xy';cfgAxis.value=cfg.axisOrder||'xy';cfgMX.value=cfg.anchorModelX??0;cfgMY.value=cfg.anchorModelY??0;cfgLat.value=cfg.anchorLat??59.7380059;cfgLng.value=cfg.anchorLng??10.2107246;cfgScaleX.value=cfg.scaleX??1;cfgScaleY.value=cfg.scaleY??1;cfgRotation.value=cfg.rotation??0}function saveCfg(){cfg.crs=cfgCRS.value;cfg.axisOrder=cfgAxis.value;cfg.anchorModelX=parseFloat(cfgMX.value)||0;cfg.anchorModelY=parseFloat(cfgMY.value)||0;cfg.anchorLat=parseFloat(cfgLat.value)||59.7380059;cfg.anchorLng=parseFloat(cfgLng.value)||10.2107246;cfg.scaleX=parseFloat(cfgScaleX.value)||1;cfg.scaleY=parseFloat(cfgScaleY.value)||1;cfg.rotation=parseFloat(cfgRotation.value)||0;localStorage.setItem('tc_minimap_kartverket_v19',JSON.stringify(cfg));coordMode.value=cfg.crs;axisOrder.value=cfg.axisOrder;setupPanel.classList.remove('show');toast('Koordinatsystem lagret – NTM bruker sentralmeridian sone + 0,5°');drawModels();drawContours();updateCameraMap();fitAll()}
-refreshModels.onclick=loadModels;zoomModel.onclick=fitAll;centerCamera.onclick=()=>{if(hasCamera&&gmap)gmap.setView(modelToLatLng(camPos.x,camPos.y),Math.max(gmap.getZoom(),19))};followBtn.onclick=e=>{followCamera=!followCamera;e.currentTarget.classList.toggle('active',followCamera);if(followCamera)centerCamera.click()};clickMoveBtn.onclick=e=>{clickMoveEnabled=!clickMoveEnabled;e.currentTarget.classList.toggle('active',clickMoveEnabled);toast(clickMoveEnabled?'Klikk i kartet flytter kamera':'Klikk-flytt av')};modelSelector.onchange=e=>{selectedModelId=e.target.value;drawModels();drawContours();fitAll()};coordMode.onchange=()=>{cfg.crs=coordMode.value;cfgCRS.value=cfg.crs;drawModels();drawContours();updateCameraMap();fitAll()};axisOrder.onchange=()=>{cfg.axisOrder=axisOrder.value;cfgAxis.value=cfg.axisOrder;drawModels();drawContours();updateCameraMap();fitAll()};mapLayer.onchange=()=>setKartLayer(mapLayer.value);['showModels','showFOV','onlySelected'].forEach(id=>document.getElementById(id).onchange=()=>{drawModels();drawContours();updateCameraMap()});configBtn.onclick=()=>setupPanel.classList.add('show');closeCfg.onclick=()=>setupPanel.classList.remove('show');saveCfg.onclick=saveCfg;
-(async function boot(){readCfg();setStatus('','Laster Kartverket…');initMap();await initTrimble()})();
+function readCfg(){try{Object.assign(cfg,JSON.parse(localStorage.getItem('tc_minimap_kartverket_v20')||localStorage.getItem('tc_minimap_kartverket_v17')||localStorage.getItem('tc_minimap_kartverket_v14')||localStorage.getItem('tc_minimap_kartverket_v13')||localStorage.getItem('tc_minimap_kartverket_v12')||localStorage.getItem('tc_minimap_kartverket_v11')||localStorage.getItem('tc_minimap_google_v9')||'{}'))}catch(e){};fillCRS(coordMode);fillCRS(cfgCRS);coordMode.value=cfg.crs||'utm33';cfgCRS.value=cfg.crs||'utm33';axisOrder.value=cfg.axisOrder||'xy';cfgAxis.value=cfg.axisOrder||'xy';cfgMX.value=cfg.anchorModelX??0;cfgMY.value=cfg.anchorModelY??0;cfgLat.value=cfg.anchorLat??59.7380059;cfgLng.value=cfg.anchorLng??10.2107246;cfgScaleX.value=cfg.scaleX??1;cfgScaleY.value=cfg.scaleY??1;cfgRotation.value=cfg.rotation??0}function saveCfg(){cfg.crs=cfgCRS.value;cfg.axisOrder=cfgAxis.value;cfg.anchorModelX=parseFloat(cfgMX.value)||0;cfg.anchorModelY=parseFloat(cfgMY.value)||0;cfg.anchorLat=parseFloat(cfgLat.value)||59.7380059;cfg.anchorLng=parseFloat(cfgLng.value)||10.2107246;cfg.scaleX=parseFloat(cfgScaleX.value)||1;cfg.scaleY=parseFloat(cfgScaleY.value)||1;cfg.rotation=parseFloat(cfgRotation.value)||0;localStorage.setItem('tc_minimap_kartverket_v20',JSON.stringify(cfg));coordMode.value=cfg.crs;axisOrder.value=cfg.axisOrder;setupPanel.classList.remove('show');toast('Koordinatsystem lagret – NTM bruker sentralmeridian sone + 0,5°');drawModels();drawContours();updateCameraMap();fitAll()}
+refreshModels.onclick=loadModels;zoomModel.onclick=fitAll;centerCamera.onclick=()=>{if(hasCamera&&gmap)gmap.setView(modelToLatLng(camPos.x,camPos.y),Math.max(gmap.getZoom(),19))};followBtn.onclick=e=>{followCamera=!followCamera;e.currentTarget.classList.toggle('active',followCamera);if(followCamera)centerCamera.click()};clickMoveBtn.onclick=e=>{clickMoveEnabled=!clickMoveEnabled;e.currentTarget.classList.toggle('active',clickMoveEnabled);toast(clickMoveEnabled?'Klikk i kartet flytter kamera':'Klikk-flytt av')};modelSelector.onchange=e=>{selectedModelId=e.target.value;drawModels();drawContours();fitAll()};coordMode.onchange=()=>{cfg.crs=coordMode.value;cfgCRS.value=cfg.crs;drawModels();drawContours();updateCameraMap();fitAll()};axisOrder.onchange=()=>{cfg.axisOrder=axisOrder.value;cfgAxis.value=cfg.axisOrder;drawModels();drawContours();updateCameraMap();fitAll()};mapLayer.onchange=()=>setKartLayer(mapLayer.value);['showModels','showFOV','onlySelected'].forEach(id=>document.getElementById(id).onchange=()=>{drawModels();drawContours();updateCameraMap()});configBtn.onclick=()=>setupPanel.classList.add('show');closeCfg.onclick=()=>setupPanel.classList.remove('show');saveCfgBtn.onclick=saveCfg;
+async function waitForLeaflet(){
+  for(let i=0;i<50;i++){ if(window.L) return true; await new Promise(r=>setTimeout(r,100)); }
+  setStatus('error','Leaflet/kartbibliotek ikke lastet');
+  return false;
+}
+(async function boot(){
+  readCfg();
+  setStatus('','Laster Kartverket…');
+  if(await waitForLeaflet()){ initMap(); await initTrimble(); }
+})();
 </script>
 </body>
 </html>
