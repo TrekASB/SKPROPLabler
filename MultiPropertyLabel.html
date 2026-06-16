@@ -1,73 +1,808 @@
 <!DOCTYPE html>
 <html lang="nb">
 <head>
-  <meta charset="UTF-8" />
-  <title>ACC-style 2D Minimap – Trimble Connect</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="UTF-8"/>
+  <title>Minimap – Google Maps – Trimble Connect</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <script src="https://components.connect.trimble.com/trimble-connect-workspace-api/index.js"></script>
   <style>
-    :root{--bg:#10131b;--panel:#20263a;--panel2:#151a28;--border:#313a56;--text:#f1f3f4;--muted:#9aa0a6;--accent:#00d4ff;--accent2:#3aa6ff;--danger:#ff5252;--success:#4caf50;--warn:#ffb020;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
-    *{box-sizing:border-box;margin:0;padding:0} body{height:100vh;background:var(--bg);color:var(--text);display:flex;flex-direction:column;overflow:hidden;user-select:none}
-    header{height:30px;display:flex;align-items:center;justify-content:space-between;padding:5px 9px;background:rgba(32,38,58,.98);border-bottom:1px solid var(--border);gap:8px;flex:0 0 auto}.title-group{display:flex;align-items:center;gap:7px}.title{font-size:12px;font-weight:900;letter-spacing:.05em;color:var(--accent);text-transform:uppercase}.status-dot{width:7px;height:7px;border-radius:50%;background:var(--muted)}.status-dot.live{background:var(--success);box-shadow:0 0 6px var(--success)}.status-dot.error{background:var(--danger)}.status-dot.warn{background:var(--warn)}
-    .map-wrap{flex:1;position:relative;overflow:hidden;background:#11151f}.map-wrap.dragging #mapCanvas{cursor:grabbing}#mapCanvas{position:absolute;inset:0;display:block;width:100%;height:100%;cursor:grab}
-    .toolbar{position:absolute;top:10px;left:10px;width:min(620px,calc(100% - 84px));background:rgba(32,38,58,.96);border:1px solid var(--border);border-radius:10px;padding:8px;display:grid;grid-template-columns:1fr auto auto auto auto;gap:6px;z-index:5;box-shadow:0 8px 24px rgba(0,0,0,.28)}
-    #modelSelector{min-width:0;background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:6px 8px;font-size:11px;outline:none}.mini-btn{border:1px solid var(--border);background:var(--panel2);color:var(--text);border-radius:7px;padding:0 9px;font-size:11px;font-weight:800;cursor:pointer;min-height:28px}.mini-btn:hover{background:#1a73e8;color:#fff}.mini-btn.active{background:#0d4f73;border-color:var(--accent);color:#fff}.filter-row{grid-column:1/-1;display:flex;align-items:center;gap:12px;font-size:10px;color:var(--muted);flex-wrap:wrap}.filter-row label{display:flex;align-items:center;gap:4px;white-space:nowrap}.filter-row input{accent-color:var(--accent)}#modelCount{margin-left:auto;font-weight:800;color:var(--muted)}
-    .badge{position:absolute;top:10px;right:58px;background:rgba(32,38,58,.96);border:1px solid var(--border);border-radius:8px;padding:4px 10px;font-size:11px;font-weight:800;color:var(--accent);z-index:4}.controls{position:absolute;right:10px;bottom:10px;display:flex;flex-direction:column;gap:4px;z-index:4}.ctrl-btn{width:30px;height:30px;border-radius:7px;border:1px solid var(--border);background:rgba(32,38,58,.96);color:var(--text);font-size:15px;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center}.ctrl-btn:hover{background:#1a73e8;color:#fff}
-    #compass{position:absolute;top:10px;right:10px;width:40px;height:40px;pointer-events:none;z-index:4}.info-bar{display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--panel);border-top:1px solid var(--border);flex:0 0 auto}.info-cell{display:flex;flex-direction:column;align-items:center;padding:6px 8px;border-right:1px solid var(--border)}.info-cell:last-child{border-right:none}.info-label{font-size:9px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}.info-value{font-size:13px;font-weight:900;font-variant-numeric:tabular-nums;color:var(--accent);margin-top:1px}
-    #overlay{position:absolute;left:50%;top:52%;transform:translate(-50%,-50%);max-width:430px;background:rgba(32,38,58,.94);border:1px solid var(--border);border-radius:12px;padding:14px 16px;z-index:3;font-size:12px;color:var(--text);text-align:center;line-height:1.45;box-shadow:0 10px 30px rgba(0,0,0,.35)}.hidden{display:none!important}.hint{color:var(--muted);font-size:11px;margin-top:8px}
+    :root{
+      --bg:#10131b;--panel:rgba(20,26,44,.97);--border:#2e3855;
+      --text:#f1f3f4;--muted:#9aa0a6;--accent:#00d4ff;
+      --danger:#ff5252;--success:#4caf50;--warn:#ffb020;
+      font-family:system-ui,-apple-system,"Segoe UI",sans-serif
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{height:100vh;background:var(--bg);color:var(--text);display:flex;flex-direction:column;overflow:hidden;user-select:none}
+
+    /* Header */
+    header{height:32px;display:flex;align-items:center;justify-content:space-between;padding:0 10px;background:var(--panel);border-bottom:1px solid var(--border);flex:0 0 auto;gap:8px}
+    .title{font-size:12px;font-weight:900;letter-spacing:.06em;color:var(--accent);text-transform:uppercase}
+    .status-dot{width:7px;height:7px;border-radius:50%;background:var(--muted);transition:background .4s}
+    .status-dot.live{background:var(--success);box-shadow:0 0 6px var(--success)}
+    .status-dot.error{background:var(--danger)}
+    .status-dot.warn{background:var(--warn)}
+
+    /* Map container */
+    #mapDiv{flex:1;position:relative}
+    #gmap{position:absolute;inset:0}
+
+    /* Overlay canvas – drawn on top of Google Maps */
+    #overlaySvg{position:absolute;inset:0;pointer-events:none;z-index:2}
+
+    /* Setup panel */
+    #setupPanel{
+      position:absolute;inset:0;z-index:20;
+      background:rgba(10,14,24,.92);
+      display:flex;flex-direction:column;align-items:center;justify-content:center;
+      gap:12px;padding:20px;text-align:center
+    }
+    #setupPanel.hidden{display:none}
+    #setupPanel h2{font-size:14px;color:var(--accent)}
+    .form-row{display:flex;flex-direction:column;gap:4px;width:100%;max-width:380px;text-align:left}
+    .form-row label{font-size:11px;color:var(--muted);font-weight:700}
+    .form-row input{background:#1a2035;border:1px solid var(--border);color:var(--text);border-radius:6px;padding:7px 10px;font-size:12px;width:100%;outline:none}
+    .form-row input:focus{border-color:var(--accent)}
+    .hint-text{font-size:10px;color:var(--muted);max-width:380px;line-height:1.5}
+    .setup-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;max-width:380px}
+
+    /* Toolbar */
+    .toolbar{
+      position:absolute;top:8px;left:8px;
+      background:var(--panel);border:1px solid var(--border);border-radius:9px;
+      padding:7px 8px;display:flex;flex-direction:column;gap:6px;z-index:5;
+      max-width:calc(100% - 60px);
+    }
+    .toolbar-row{display:flex;gap:5px;align-items:center;flex-wrap:wrap}
+    select.mini-sel{background:#111827;color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 7px;font-size:11px;outline:none;min-width:0;flex:1}
+    .mini-btn{border:1px solid var(--border);background:#111827;color:var(--text);border-radius:6px;padding:0 8px;font-size:11px;font-weight:800;cursor:pointer;height:26px;white-space:nowrap}
+    .mini-btn:hover{background:#1a73e8;color:#fff}
+    .mini-btn.active{background:#0d4f73;border-color:var(--accent);color:#fff}
+    .filter-row{display:flex;gap:10px;flex-wrap:wrap;font-size:10px;color:var(--muted)}
+    .filter-row label{display:flex;align-items:center;gap:3px;cursor:pointer}
+    .filter-row input{accent-color:var(--accent)}
+    #modelCount{margin-left:auto;font-size:10px;font-weight:800;color:var(--muted)}
+
+    /* Badges */
+    #levelBadge{position:absolute;top:8px;right:54px;background:var(--panel);border:1px solid var(--border);border-radius:7px;padding:3px 9px;font-size:11px;font-weight:800;color:var(--accent);z-index:5}
+    #compassWrap{position:absolute;top:8px;right:8px;width:40px;height:40px;z-index:5;pointer-events:none}
+
+    /* Controls */
+    .controls{position:absolute;right:8px;bottom:8px;display:flex;flex-direction:column;gap:4px;z-index:5}
+    .ctrl-btn{width:30px;height:30px;border-radius:7px;border:1px solid var(--border);background:var(--panel);color:var(--text);font-size:15px;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center}
+    .ctrl-btn:hover{background:#1a73e8;color:#fff}
+
+    /* Info bar */
+    .info-bar{display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--panel);border-top:1px solid var(--border);flex:0 0 auto}
+    .info-cell{display:flex;flex-direction:column;align-items:center;padding:5px 8px;border-right:1px solid var(--border)}
+    .info-cell:last-child{border-right:none}
+    .info-label{font-size:9px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+    .info-value{font-size:12px;font-weight:900;font-variant-numeric:tabular-nums;color:var(--accent);margin-top:1px}
+
+    /* Toast */
+    #toast{position:absolute;bottom:48px;left:50%;transform:translateX(-50%);background:var(--panel);border:1px solid var(--border);border-radius:7px;padding:6px 14px;font-size:11px;z-index:10;white-space:nowrap;opacity:0;transition:opacity .3s}
+    #toast.show{opacity:1}
+
+    .hidden{display:none!important}
+    button{cursor:pointer}
   </style>
 </head>
 <body>
+
+<!-- Header -->
 <header>
-  <div class="title-group"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3V6z"/><path d="M9 3v15M15 6v15"/></svg><span class="title">ACC 2D Minimap</span></div>
-  <div style="display:flex;align-items:center;gap:6px"><span id="statusText" style="font-size:11px;color:var(--muted)">Kobler til…</span><div class="status-dot" id="statusDot"></div></div>
+  <div style="display:flex;align-items:center;gap:7px">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3V6z"/><path d="M9 3v15M15 6v15"/></svg>
+    <span class="title">Minimap – Google Maps</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:6px">
+    <span id="statusText" style="font-size:11px;color:var(--muted)">Starter…</span>
+    <div class="status-dot" id="statusDot"></div>
+  </div>
 </header>
-<div class="map-wrap" id="mapWrap">
-  <canvas id="mapCanvas"></canvas>
-  <div class="toolbar">
-    <select id="modelSelector"><option value="__all__">Laster modeller…</option></select>
-    <button class="mini-btn" id="refreshModels" title="Hent modeller på nytt">↻</button>
-    <button class="mini-btn" id="zoomModel" title="Zoom til valgt modell eller alle modeller">Zoom</button>
-    <button class="mini-btn" id="centerCamera" title="Sentrer på ståsted">Ståsted</button>
-    <button class="mini-btn active" id="followBtn" title="Følg kamera">Følg</button>
+
+<!-- Map area -->
+<div id="mapDiv">
+  <div id="gmap"></div>
+  <canvas id="overlaySvg"></canvas>
+
+  <!-- Setup panel (shown first) -->
+  <div id="setupPanel">
+    <h2>🗺️ Konfigurasjon – koordinater</h2>
+    <p class="hint-text">
+      Angi ett kjent punkt der modellkoordinater og GPS-koordinater er kjent.
+      Dette brukes til å transformere alle modellposisjoner til Google Maps.
+    </p>
+
+    <div class="setup-grid">
+      <div class="form-row">
+        <label>Modell X (øst)</label>
+        <input id="cfgMX" type="number" placeholder="f.eks. 0" value="0"/>
+      </div>
+      <div class="form-row">
+        <label>Modell Y (nord)</label>
+        <input id="cfgMY" type="number" placeholder="f.eks. 0" value="0"/>
+      </div>
+      <div class="form-row">
+        <label>GPS Latitude</label>
+        <input id="cfgLat" type="number" step="any" placeholder="f.eks. 59.9139"/>
+      </div>
+      <div class="form-row">
+        <label>GPS Longitude</label>
+        <input id="cfgLng" type="number" step="any" placeholder="f.eks. 10.7522"/>
+      </div>
+      <div class="form-row">
+        <label>Meter pr. modellenhet X</label>
+        <input id="cfgScaleX" type="number" step="any" placeholder="1.0" value="1"/>
+      </div>
+      <div class="form-row">
+        <label>Meter pr. modellenhet Y</label>
+        <input id="cfgScaleY" type="number" step="any" placeholder="1.0" value="1"/>
+      </div>
+    </div>
+
+    <div class="form-row" style="max-width:380px">
+      <label>Modellens nordretning (grader fra ekte nord, 0 = modell-Y peker nord)</label>
+      <input id="cfgRotation" type="number" step="any" placeholder="0" value="0"/>
+    </div>
+
+    <div class="form-row" style="max-width:380px">
+      <label>Google Maps API-nøkkel (valgfritt – bruk din egen for produksjon)</label>
+      <input id="cfgApiKey" type="text" placeholder="AIza…"/>
+    </div>
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
+      <button class="mini-btn" onclick="applyConfig()" style="height:32px;padding:0 18px;font-size:12px;background:#1a73e8;color:#fff;border-color:#1a73e8">
+        ✓ Start minimap
+      </button>
+      <button class="mini-btn" onclick="loadDemo()" style="height:32px;padding:0 14px;font-size:12px">
+        Demo (Oslo)
+      </button>
+    </div>
+    <p class="hint-text" style="margin-top:4px">
+      Uten API-nøkkel lastes Google Maps i developer-modus (vannmerke, begrenset bruk).
+    </p>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="toolbar" id="mainToolbar" style="display:none">
+    <div class="toolbar-row">
+      <select class="mini-sel" id="modelSelector"><option value="__all__">Alle modeller</option></select>
+      <button class="mini-btn" id="refreshModels" title="Oppdater modeller">↻</button>
+      <button class="mini-btn" id="zoomModel">Zoom</button>
+      <button class="mini-btn" id="centerCamera">Ståsted</button>
+      <button class="mini-btn active" id="followBtn">Følg</button>
+      <button class="mini-btn" id="configBtn" title="Endre koordinater">⚙</button>
+    </div>
     <div class="filter-row">
-      <label><input type="checkbox" id="showModels" checked> Vis modellomriss</label>
-      <label><input type="checkbox" id="selectedOnly"> Kun valgt modell</label>
-      <label><input type="checkbox" id="showTrail" checked> Vis spor</label>
-      <label><input type="checkbox" id="showGrid" checked> Rutenett</label>
+      <label><input type="checkbox" id="showModels" checked> Modellomriss</label>
+      <label><input type="checkbox" id="showTrail" checked> Spor</label>
+      <label><input type="checkbox" id="showFOV" checked> Synsfelt</label>
       <span id="modelCount">0 filer</span>
     </div>
   </div>
-  <div class="badge" id="levelBadge">Z: –</div>
-  <svg id="compass" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><circle cx="24" cy="24" r="22" fill="#151a28" stroke="#313a56" stroke-width="1.5"/><polygon id="compassNeedle" points="24,5 27,24 24,20 21,24" fill="var(--accent)" opacity=".95"/><polygon id="compassNeedleS" points="24,43 21,24 24,28 27,24" fill="var(--muted)" opacity=".55"/><text x="24" y="14" text-anchor="middle" font-size="6" font-weight="900" fill="var(--accent)" font-family="system-ui">N</text></svg>
-  <div class="controls"><button class="ctrl-btn" id="zoomIn">+</button><button class="ctrl-btn" id="zoomOut">−</button><button class="ctrl-btn" id="resetView">⊙</button></div>
-  <div id="overlay">Venter på modellutstrekning og kameraposisjon…<div class="hint">Minikartet viser modellene som 2D-omriss når Trimble Connect gir bounding box. Kameraikonet viser ståsted og synsretning.</div></div>
+
+  <!-- Level badge -->
+  <div id="levelBadge">Z: –</div>
+
+  <!-- Compass -->
+  <svg id="compassWrap" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="24" cy="24" r="22" fill="rgba(20,26,44,.92)" stroke="#2e3855" stroke-width="1.5"/>
+    <polygon id="compassNeedle" points="24,5 27,24 24,20 21,24" fill="var(--accent)" opacity=".95"/>
+    <polygon id="compassNeedleS" points="24,43 21,24 24,28 27,24" fill="#9aa0a6" opacity=".55"/>
+    <text x="24" y="14" text-anchor="middle" font-size="6" font-weight="900" fill="var(--accent)" font-family="system-ui">N</text>
+  </svg>
+
+  <!-- Controls -->
+  <div class="controls" id="mainControls" style="display:none">
+    <button class="ctrl-btn" id="zoomIn">+</button>
+    <button class="ctrl-btn" id="zoomOut">−</button>
+    <button class="ctrl-btn" id="resetView" title="Fit alle modeller">⊙</button>
+  </div>
+
+  <div id="toast"></div>
 </div>
-<div class="info-bar"><div class="info-cell"><span class="info-label">X / Øst</span><span class="info-value" id="valX">–</span></div><div class="info-cell"><span class="info-label">Y / Nord</span><span class="info-value" id="valY">–</span></div><div class="info-cell"><span class="info-label">Retning</span><span class="info-value" id="valDir">–°</span></div></div>
+
+<!-- Info bar -->
+<div class="info-bar">
+  <div class="info-cell"><span class="info-label">Lat</span><span class="info-value" id="valLat">–</span></div>
+  <div class="info-cell"><span class="info-label">Lng</span><span class="info-value" id="valLng">–</span></div>
+  <div class="info-cell"><span class="info-label">Retning</span><span class="info-value" id="valDir">–°</span></div>
+</div>
+
 <script>
-let API=null;let hasCamera=false;let camPos={x:0,y:0,z:0};let camDir={x:0,y:1,z:0};let scale=1,offsetX=0,offsetY=0;let followCamera=true;let models=[];let selectedModelId="__all__";let trail=[];const MAX_TRAIL=400;const canvas=document.getElementById('mapCanvas'),ctx=canvas.getContext('2d'),mapWrap=document.getElementById('mapWrap'),overlay=document.getElementById('overlay');
-function setStatus(type,text){document.getElementById('statusDot').className='status-dot'+(type?' '+type:'');document.getElementById('statusText').textContent=text}
-function resize(){canvas.width=canvas.clientWidth;canvas.height=canvas.clientHeight;draw()} new ResizeObserver(resize).observe(canvas);
-function finite(n){return Number.isFinite(n)} function normBox(b){if(!b)return null;let min=b.min||b.minimum||b.minPoint||b.Min||b.boxMin;let max=b.max||b.maximum||b.maxPoint||b.Max||b.boxMax;if(!min&&Array.isArray(b)&&b.length>=2){min=b[0];max=b[1]} if(!min||!max)return null;const out={minX:+(min.x??min.X),minY:+(min.y??min.Y),minZ:+(min.z??min.Z??0),maxX:+(max.x??max.X),maxY:+(max.y??max.Y),maxZ:+(max.z??max.Z??0)}; if([out.minX,out.minY,out.maxX,out.maxY].every(finite)&&out.maxX!==out.minX&&out.maxY!==out.minY)return out; return null}
-function merge(a,b){if(!b)return a; if(!a)return {...b}; return {minX:Math.min(a.minX,b.minX),minY:Math.min(a.minY,b.minY),minZ:Math.min(a.minZ||0,b.minZ||0),maxX:Math.max(a.maxX,b.maxX),maxY:Math.max(a.maxY,b.maxY),maxZ:Math.max(a.maxZ||0,b.maxZ||0)}}
-function getVisibleModels(){let arr=models.filter(m=>m.bbox); if(document.getElementById('selectedOnly').checked&&selectedModelId!=='__all__')arr=arr.filter(m=>String(m.id)===String(selectedModelId)); return arr}
-function projectBounds(){let b=null; for(const m of getVisibleModels())b=merge(b,m.bbox); if(!b&&hasCamera)b={minX:camPos.x-25,minY:camPos.y-25,maxX:camPos.x+25,maxY:camPos.y+25,minZ:camPos.z,maxZ:camPos.z}; return b}
-function fitToBox(b){if(!b)return false; const pad=55,W=Math.max(20,canvas.width-pad*2),H=Math.max(20,canvas.height-pad*2),mW=Math.max(1,b.maxX-b.minX),mH=Math.max(1,b.maxY-b.minY); scale=Math.min(W/mW,H/mH); const cx=(b.minX+b.maxX)/2,cy=(b.minY+b.maxY)/2; offsetX=canvas.width/2-cx*scale; offsetY=canvas.height/2+cy*scale; draw(); return true}
-function toCanvas(x,y){return{cx:x*scale+offsetX,cy:-y*scale+offsetY}} function fromCanvas(cx,cy){return{x:(cx-offsetX)/scale,y:-(cy-offsetY)/scale}}
-function draw(){const W=canvas.width,H=canvas.height;ctx.clearRect(0,0,W,H);ctx.fillStyle='#11151f';ctx.fillRect(0,0,W,H); if(document.getElementById('showGrid').checked)drawGrid(W,H); if(document.getElementById('showModels').checked)drawModels(); if(document.getElementById('showTrail').checked)drawTrail(); if(hasCamera){const p=toCanvas(camPos.x,camPos.y);drawCamera(p.cx,p.cy)} const hasModel=getVisibleModels().length>0; overlay.classList.toggle('hidden',hasModel||hasCamera)}
-function drawGrid(W,H){const raw=90/scale; const exp=Math.floor(Math.log10(Math.max(raw,.001))); const nice=[1,2,5,10]; let step=nice.map(n=>n*Math.pow(10,exp)).find(v=>v*scale>=45)||Math.pow(10,exp+1); ctx.strokeStyle='rgba(0,212,255,.07)';ctx.lineWidth=1;let sx=Math.floor((-offsetX/scale)/step)*step;for(let x=sx;x<(W-offsetX)/scale;x+=step){const p=x*scale+offsetX;ctx.beginPath();ctx.moveTo(p,0);ctx.lineTo(p,H);ctx.stroke()}let sy=Math.floor(((offsetY-H)/scale)/step)*step;for(let y=sy;y<offsetY/scale;y+=step){const p=-y*scale+offsetY;ctx.beginPath();ctx.moveTo(0,p);ctx.lineTo(W,p);ctx.stroke()}ctx.setLineDash([4,4]);ctx.strokeStyle='rgba(0,212,255,.18)';const o=toCanvas(0,0);ctx.beginPath();ctx.moveTo(o.cx,0);ctx.lineTo(o.cx,H);ctx.stroke();ctx.beginPath();ctx.moveTo(0,o.cy);ctx.lineTo(W,o.cy);ctx.stroke();ctx.setLineDash([])}
-function drawModels(){const arr=getVisibleModels(); arr.forEach((m,i)=>{const b=m.bbox,p1=toCanvas(b.minX,b.minY),p2=toCanvas(b.maxX,b.maxY); const x=Math.min(p1.cx,p2.cx),y=Math.min(p1.cy,p2.cy),w=Math.abs(p2.cx-p1.cx),h=Math.abs(p2.cy-p1.cy); const sel=String(m.id)===String(selectedModelId); ctx.fillStyle=sel?'rgba(0,212,255,.18)':'rgba(58,166,255,.08)';ctx.strokeStyle=sel?'rgba(0,212,255,.95)':'rgba(58,166,255,.55)';ctx.lineWidth=sel?2.2:1.2;ctx.fillRect(x,y,w,h);ctx.strokeRect(x,y,w,h); if(w>45&&h>14){ctx.fillStyle=sel?'#e8fbff':'rgba(241,243,244,.75)';ctx.font='10px system-ui';ctx.textBaseline='top';ctx.fillText((m.name||m.id||'modell').slice(0,46),x+5,y+4)}})}
-function drawTrail(){if(trail.length<2)return;ctx.beginPath();let p=toCanvas(trail[0].x,trail[0].y);ctx.moveTo(p.cx,p.cy);for(let i=1;i<trail.length;i++){p=toCanvas(trail[i].x,trail[i].y);ctx.lineTo(p.cx,p.cy)}ctx.strokeStyle='rgba(0,212,255,.28)';ctx.lineWidth=1.5;ctx.stroke()}
-function drawCamera(px,py){const heading=Math.atan2(camDir.x,camDir.y),len=70,spread=Math.PI/5; const v=a=>({dx:Math.sin(a),dy:-Math.cos(a)});const l=v(heading-spread),r=v(heading+spread),c=v(heading);ctx.beginPath();ctx.moveTo(px,py);ctx.lineTo(px+l.dx*len,py+l.dy*len);ctx.lineTo(px+c.dx*len*1.08,py+c.dy*len*1.08);ctx.lineTo(px+r.dx*len,py+r.dy*len);ctx.closePath();const g=ctx.createRadialGradient(px,py,0,px,py,len);g.addColorStop(0,'rgba(0,212,255,.40)');g.addColorStop(1,'rgba(0,212,255,0)');ctx.fillStyle=g;ctx.fill();ctx.strokeStyle='rgba(0,212,255,.45)';ctx.stroke(); ctx.save();ctx.translate(px,py);ctx.rotate(heading);ctx.beginPath();ctx.moveTo(0,-14);ctx.lineTo(9,9);ctx.lineTo(0,5);ctx.lineTo(-9,9);ctx.closePath();ctx.fillStyle='#00d4ff';ctx.strokeStyle='#06131c';ctx.lineWidth=2;ctx.stroke();ctx.fill();ctx.restore();ctx.beginPath();ctx.arc(px,py,16,0,Math.PI*2);ctx.strokeStyle='rgba(0,212,255,.22)';ctx.lineWidth=4;ctx.stroke()}
-function updateInfo(){document.getElementById('valX').textContent=camPos.x.toFixed(1);document.getElementById('valY').textContent=camPos.y.toFixed(1);const deg=((Math.atan2(camDir.x,camDir.y)*180/Math.PI)+360)%360;document.getElementById('valDir').textContent=deg.toFixed(0)+'°';document.getElementById('levelBadge').textContent='Z: '+camPos.z.toFixed(1)+' m';document.getElementById('compassNeedle').setAttribute('transform',`rotate(${deg},24,24)`);document.getElementById('compassNeedleS').setAttribute('transform',`rotate(${deg},24,24)`)}
-function onCameraUpdate(pos,dir){if(!pos)return;camPos={x:+(pos.x??pos.X??0),y:+(pos.y??pos.Y??0),z:+(pos.z??pos.Z??0)}; if(dir){camDir={x:+(dir.x??dir.X??0),y:+(dir.y??dir.Y??1),z:+(dir.z??dir.Z??0)};const L=Math.hypot(camDir.x,camDir.y,camDir.z)||1;camDir.x/=L;camDir.y/=L;camDir.z/=L}hasCamera=true;trail.push({x:camPos.x,y:camPos.y});if(trail.length>MAX_TRAIL)trail.shift(); if(followCamera){const p=toCanvas(camPos.x,camPos.y);offsetX+=canvas.width/2-p.cx;offsetY+=canvas.height/2-p.cy}updateInfo();draw();setStatus('live','Live')}
-function vFromTo(a,b){if(!a||!b)return null;return{x:(b.x??b.X??0)-(a.x??a.X??0),y:(b.y??b.Y??0)-(a.y??a.Y??0),z:(b.z??b.Z??0)-(a.z??a.Z??0)}}
-async function tryBox(id){const calls=[()=>API.viewer?.getObjectBoundingBox?.(id),()=>API.viewer?.getModelBoundingBox?.(id),()=>API.viewer?.getBoundingBox?.(id),()=>API.viewer?.models?.getBoundingBox?.(id),()=>API.models?.getBoundingBox?.(id)]; for(const c of calls){try{const b=normBox(await c()); if(b)return b}catch(e){}}return null}
-async function loadModels(){const sel=document.getElementById('modelSelector');sel.innerHTML='<option value="__all__">Alle modeller</option>';models=[];let raw=[];const calls=[()=>API.viewer?.getModels?.(),()=>API.viewer?.models?.getModels?.(),()=>API.models?.getModels?.(),()=>API.project?.getModels?.()]; for(const c of calls){try{const r=await c(); if(Array.isArray(r)){raw=r;break} if(Array.isArray(r?.models)){raw=r.models;break} if(Array.isArray(r?.data)){raw=r.data;break}}catch(e){}} for(const item of raw){const id=item.id??item.modelId??item.guid??item.identifier??item.objectId; const name=item.name??item.fileName??item.title??String(id); if(id===undefined||id===null)continue; const bbox=normBox(item.boundingBox||item.bbox||item.bounds)||await tryBox(id); models.push({id,name,bbox}); const opt=document.createElement('option');opt.value=String(id);opt.textContent=bbox?name:`${name} (mangler 2D)`;sel.appendChild(opt)}document.getElementById('modelCount').textContent=`${models.length} filer`; if(models.some(m=>m.bbox)){fitToBox(projectBounds());setStatus('live','Tilkoblet')}else{setStatus('warn','Ingen modellomriss');draw()}}
-async function init(){setStatus('', 'Kobler til…');try{API=await TrimbleConnectWorkspace.connect(window.parent,async(event,args)=>{if(['viewer.camera','viewer.cameraChanged','camera.changed','extension.camera'].includes(event)){const d=args?.data??args;const pos=d?.position??d?.eye??d?.cameraPosition;const dir=d?.direction??(d?.target||d?.lookAt?vFromTo(d.eye??d.position,d.target??d.lookAt):null);onCameraUpdate(pos,dir)}}); await loadModels(); try{const cam=await API.viewer?.getCamera?.();if(cam){onCameraUpdate(cam.position??cam.eye,cam.direction??(cam.target?vFromTo(cam.eye??cam.position,cam.target):null))}}catch(e){} try{await API.viewer?.subscribeToCamera?.()}catch(e){} try{await API.viewer?.enableCameraEvents?.()}catch(e){} if(!hasCamera&&!models.some(m=>m.bbox))setStatus('warn','Venter på data')}catch(e){console.error(e);setStatus('error','Frakoblet');draw()}}
-let dragging=false,x0=0,y0=0,ox0=0,oy0=0;canvas.addEventListener('mousedown',e=>{dragging=true;followCamera=false;document.getElementById('followBtn').classList.remove('active');mapWrap.classList.add('dragging');x0=e.clientX;y0=e.clientY;ox0=offsetX;oy0=offsetY});window.addEventListener('mousemove',e=>{if(!dragging)return;offsetX=ox0+e.clientX-x0;offsetY=oy0+e.clientY-y0;draw()});window.addEventListener('mouseup',()=>{dragging=false;mapWrap.classList.remove('dragging')});canvas.addEventListener('wheel',e=>{e.preventDefault();followCamera=false;document.getElementById('followBtn').classList.remove('active');const f=e.deltaY<0?1.15:.87,rect=canvas.getBoundingClientRect(),mx=e.clientX-rect.left,my=e.clientY-rect.top;offsetX=mx+(offsetX-mx)*f;offsetY=my+(offsetY-my)*f;scale*=f;draw()},{passive:false});
-document.getElementById('zoomIn').onclick=()=>{scale*=1.25;draw()};document.getElementById('zoomOut').onclick=()=>{scale/=1.25;draw()};document.getElementById('resetView').onclick=()=>fitToBox(projectBounds());document.getElementById('refreshModels').onclick=loadModels;document.getElementById('modelSelector').onchange=e=>{selectedModelId=e.target.value;draw()};document.getElementById('zoomModel').onclick=()=>{let b=null;if(selectedModelId!=='__all__'){const m=models.find(x=>String(x.id)===String(selectedModelId));b=m?.bbox||null}else b=projectBounds(); if(!fitToBox(b)&&hasCamera){fitToBox({minX:camPos.x-25,minY:camPos.y-25,maxX:camPos.x+25,maxY:camPos.y+25,minZ:camPos.z,maxZ:camPos.z})}};document.getElementById('centerCamera').onclick=()=>{if(!hasCamera)return;const p=toCanvas(camPos.x,camPos.y);offsetX+=canvas.width/2-p.cx;offsetY+=canvas.height/2-p.cy;draw()};document.getElementById('followBtn').onclick=e=>{followCamera=!followCamera;e.currentTarget.classList.toggle('active',followCamera);if(followCamera)document.getElementById('centerCamera').click()};['showModels','selectedOnly','showTrail','showGrid'].forEach(id=>document.getElementById(id).addEventListener('change',draw));
-resize();draw();init();
+// ════════════════════════════════════════════════════════════
+//  STATE
+// ════════════════════════════════════════════════════════════
+let API = null;
+let gmap = null;                // Google Map instance
+let gmapsLoaded = false;
+
+// Camera state
+let camPos   = { x: 0, y: 0, z: 0 };
+let camDir   = { x: 0, y: 1, z: 0 };
+let hasCamera = false;
+let followCamera = true;
+let trail = [];
+const MAX_TRAIL = 400;
+
+// Models
+let models = [];
+let selectedModelId = "__all__";
+
+// Overlays on map
+let cameraMarker   = null;  // Google Maps Marker for camera
+let fovPolyline    = null;  // FOV polygon
+let modelPolygons  = [];    // bounding box polygons
+let trailPolyline  = null;  // trail path
+
+// ── Coordinate transform config ──
+// We define an affine mapping: model (X,Y) → WGS84 (lat,lng)
+// anchor: one known correspondence point
+// scaleX/Y: metres per model unit in X/Y directions
+// rotation: angle (degrees) between model-Y and true north (clockwise positive)
+let cfg = {
+  anchorModelX : 0,
+  anchorModelY : 0,
+  anchorLat    : 59.9139,   // default: Oslo
+  anchorLng    : 10.7522,
+  scaleX       : 1,         // metres / model-unit east
+  scaleY       : 1,         // metres / model-unit north
+  rotation     : 0          // degrees model-Y is rotated from true north (CW)
+};
+
+// Earth radius for metre→degree conversions
+const EARTH_R = 6378137;
+
+// ════════════════════════════════════════════════════════════
+//  COORDINATE TRANSFORM  model (x,y) → {lat, lng}
+// ════════════════════════════════════════════════════════════
+function modelToLatLng(mx, my) {
+  // 1. Translate relative to anchor
+  const dx = (mx - cfg.anchorModelX) * cfg.scaleX;   // metres east in model frame
+  const dy = (my - cfg.anchorModelY) * cfg.scaleY;   // metres north in model frame
+
+  // 2. Rotate by cfg.rotation (clockwise, degrees)
+  //    true-north east  = dx·cos(θ) + dy·sin(θ)
+  //    true-north north = -dx·sin(θ) + dy·cos(θ)
+  const θ = cfg.rotation * Math.PI / 180;
+  const east  =  dx * Math.cos(θ) + dy * Math.sin(θ);
+  const north = -dx * Math.sin(θ) + dy * Math.cos(θ);
+
+  // 3. Convert metres to degrees
+  const anchorLatRad = cfg.anchorLat * Math.PI / 180;
+  const dLat = north / EARTH_R * (180 / Math.PI);
+  const dLng = east  / (EARTH_R * Math.cos(anchorLatRad)) * (180 / Math.PI);
+
+  return { lat: cfg.anchorLat + dLat, lng: cfg.anchorLng + dLng };
+}
+
+function headingToTrue(modelHeading) {
+  // modelHeading: radians, 0=model-Y, CW positive
+  // true heading = modelHeading + rotation (both in degrees)
+  return ((modelHeading * 180 / Math.PI) + cfg.rotation + 360) % 360;
+}
+
+// ════════════════════════════════════════════════════════════
+//  GOOGLE MAPS LOADER
+// ════════════════════════════════════════════════════════════
+function loadGoogleMaps(apiKey) {
+  return new Promise((resolve) => {
+    if (gmapsLoaded) { resolve(); return; }
+    window.__gmapsCB = () => { gmapsLoaded = true; resolve(); };
+    const key = apiKey ? `&key=${apiKey}` : '';
+    const s = document.createElement('script');
+    s.src = `https://maps.googleapis.com/maps/api/js?callback=__gmapsCB${key}&v=weekly`;
+    s.async = true;
+    document.head.appendChild(s);
+  });
+}
+
+// ════════════════════════════════════════════════════════════
+//  INIT MAP
+// ════════════════════════════════════════════════════════════
+function initMap() {
+  const center = { lat: cfg.anchorLat, lng: cfg.anchorLng };
+  gmap = new google.maps.Map(document.getElementById('gmap'), {
+    center,
+    zoom: 18,
+    mapTypeId: 'hybrid',          // satellite + labels
+    disableDefaultUI: true,
+    gestureHandling: 'greedy',
+    styles: [
+      { featureType: 'all', elementType: 'labels', stylers: [{ visibility: 'on' }] }
+    ]
+  });
+
+  // Sync Google Maps zoom/pan controls to our buttons
+  document.getElementById('zoomIn').onclick  = () => gmap.setZoom(gmap.getZoom() + 1);
+  document.getElementById('zoomOut').onclick = () => gmap.setZoom(gmap.getZoom() - 1);
+  document.getElementById('resetView').onclick = fitAllModels;
+
+  toast("Google Maps lastet ✓");
+}
+
+// ════════════════════════════════════════════════════════════
+//  MODEL BOUNDING BOX POLYGONS
+// ════════════════════════════════════════════════════════════
+function drawModelBoxes() {
+  // Remove old polygons
+  modelPolygons.forEach(p => p.setMap(null));
+  modelPolygons = [];
+
+  if (!document.getElementById('showModels').checked) return;
+
+  const arr = models.filter(m => m.bbox);
+  arr.forEach(m => {
+    const b = m.bbox;
+    const sel = String(m.id) === String(selectedModelId);
+    // 4 corners of the bounding box in model space
+    const corners = [
+      { x: b.minX, y: b.minY },
+      { x: b.maxX, y: b.minY },
+      { x: b.maxX, y: b.maxY },
+      { x: b.minX, y: b.maxY }
+    ].map(c => {
+      const ll = modelToLatLng(c.x, c.y);
+      return new google.maps.LatLng(ll.lat, ll.lng);
+    });
+
+    const poly = new google.maps.Polygon({
+      paths: corners,
+      strokeColor:   sel ? '#00d4ff' : '#3aa6ff',
+      strokeOpacity: sel ? 0.95       : 0.60,
+      strokeWeight:  sel ? 2.5        : 1.5,
+      fillColor:     sel ? '#00d4ff' : '#3aa6ff',
+      fillOpacity:   sel ? 0.15       : 0.07,
+      map: gmap,
+      clickable: false,
+      zIndex: 1
+    });
+    modelPolygons.push(poly);
+
+    // Label via InfoWindow-less approach: use an overlay marker with label
+    if (m.name) {
+      const center = modelToLatLng(
+        (b.minX + b.maxX) / 2,
+        (b.minY + b.maxY) / 2
+      );
+      const label = new google.maps.Marker({
+        position: { lat: center.lat, lng: center.lng },
+        map: gmap,
+        label: {
+          text: (m.name || '').slice(0, 30),
+          color: sel ? '#00d4ff' : 'rgba(241,243,244,.8)',
+          fontSize: '10px',
+          fontWeight: '700'
+        },
+        icon: { path: google.maps.SymbolPath.CIRCLE, scale: 0 },
+        clickable: false,
+        zIndex: 2
+      });
+      modelPolygons.push(label);
+    }
+  });
+}
+
+// ════════════════════════════════════════════════════════════
+//  TRAIL
+// ════════════════════════════════════════════════════════════
+function updateTrail() {
+  if (trailPolyline) { trailPolyline.setMap(null); trailPolyline = null; }
+  if (!document.getElementById('showTrail').checked || trail.length < 2) return;
+
+  const path = trail.map(p => {
+    const ll = modelToLatLng(p.x, p.y);
+    return new google.maps.LatLng(ll.lat, ll.lng);
+  });
+
+  trailPolyline = new google.maps.Polyline({
+    path,
+    strokeColor:   '#00d4ff',
+    strokeOpacity: 0.35,
+    strokeWeight:  2.5,
+    map: gmap,
+    clickable: false,
+    zIndex: 3
+  });
+}
+
+// ════════════════════════════════════════════════════════════
+//  CAMERA MARKER + FOV
+// ════════════════════════════════════════════════════════════
+function buildCameraIcon(headingDeg) {
+  // SVG arrow rotated to heading
+  const svgStr = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="-18 -18 36 36">
+      <circle r="10" fill="#00d4ff" fill-opacity=".25" stroke="#00d4ff" stroke-width="1.5"/>
+      <polygon points="0,-13 7,7 0,3 -7,7" fill="#00d4ff" stroke="#06131c" stroke-width="1.5"
+        transform="rotate(${headingDeg})"/>
+    </svg>`;
+  return {
+    url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svgStr),
+    scaledSize: new google.maps.Size(36, 36),
+    anchor:     new google.maps.Point(18, 18)
+  };
+}
+
+function updateCameraOnMap() {
+  if (!hasCamera || !gmap) return;
+
+  const ll    = modelToLatLng(camPos.x, camPos.y);
+  const latLng = new google.maps.LatLng(ll.lat, ll.lng);
+
+  // Heading: model atan2(x,y) in model frame → true bearing
+  const modelHeading = Math.atan2(camDir.x, camDir.y); // 0=Y-axis (model north)
+  const trueBearing  = headingToTrue(modelHeading);
+
+  // Camera marker
+  if (!cameraMarker) {
+    cameraMarker = new google.maps.Marker({
+      position: latLng,
+      map: gmap,
+      icon: buildCameraIcon(trueBearing),
+      zIndex: 10,
+      clickable: false
+    });
+  } else {
+    cameraMarker.setPosition(latLng);
+    cameraMarker.setIcon(buildCameraIcon(trueBearing));
+  }
+
+  // FOV cone (approximate as a triangle polygon)
+  if (fovPolyline) { fovPolyline.setMap(null); fovPolyline = null; }
+  if (document.getElementById('showFOV').checked) {
+    const FOV   = 60;   // degrees total field of view
+    const RANGE = 20;   // metres in the real world
+    const leftBear  = (trueBearing - FOV / 2 + 360) % 360;
+    const rightBear = (trueBearing + FOV / 2 + 360) % 360;
+
+    function bearingOffset(lat, lng, bearing, dist) {
+      const bearRad = bearing * Math.PI / 180;
+      const latRad  = lat * Math.PI / 180;
+      const dLat = dist / EARTH_R * (180 / Math.PI);
+      const dLng = dist * Math.sin(bearRad) / (EARTH_R * Math.cos(latRad)) * (180 / Math.PI);
+      const newLat = lat + dLat * Math.cos(bearRad);
+      return { lat: newLat, lng: lng + dLng };
+    }
+
+    const pL = bearingOffset(ll.lat, ll.lng, leftBear,  RANGE);
+    const pR = bearingOffset(ll.lat, ll.lng, rightBear, RANGE);
+    const pC = bearingOffset(ll.lat, ll.lng, trueBearing, RANGE * 0.95);
+
+    fovPolyline = new google.maps.Polygon({
+      paths: [
+        { lat: ll.lat, lng: ll.lng },
+        { lat: pL.lat, lng: pL.lng },
+        { lat: pC.lat, lng: pC.lng },
+        { lat: pR.lat, lng: pR.lng }
+      ],
+      strokeColor:   '#00d4ff',
+      strokeOpacity: 0.5,
+      strokeWeight:  1,
+      fillColor:     '#00d4ff',
+      fillOpacity:   0.13,
+      map: gmap,
+      clickable: false,
+      zIndex: 4
+    });
+  }
+
+  // Follow camera
+  if (followCamera) {
+    gmap.panTo(latLng);
+  }
+
+  // Compass
+  const n = document.getElementById('compassNeedle');
+  const s = document.getElementById('compassNeedleS');
+  n.setAttribute('transform', `rotate(${trueBearing},24,24)`);
+  s.setAttribute('transform', `rotate(${trueBearing},24,24)`);
+
+  // Info bar
+  document.getElementById('valLat').textContent = ll.lat.toFixed(6);
+  document.getElementById('valLng').textContent = ll.lng.toFixed(6);
+  document.getElementById('valDir').textContent = trueBearing.toFixed(0) + '°';
+  document.getElementById('levelBadge').textContent = 'Z: ' + camPos.z.toFixed(1) + ' m';
+}
+
+// ════════════════════════════════════════════════════════════
+//  CAMERA UPDATE (from Trimble)
+// ════════════════════════════════════════════════════════════
+function onCameraUpdate(pos, dir) {
+  if (!pos) return;
+  camPos = { x: +(pos.x ?? 0), y: +(pos.y ?? 0), z: +(pos.z ?? 0) };
+  if (dir) {
+    camDir = { x: +(dir.x ?? 0), y: +(dir.y ?? 1), z: +(dir.z ?? 0) };
+    const L = Math.hypot(camDir.x, camDir.y, camDir.z) || 1;
+    camDir.x /= L; camDir.y /= L; camDir.z /= L;
+  }
+  hasCamera = true;
+  trail.push({ x: camPos.x, y: camPos.y });
+  if (trail.length > MAX_TRAIL) trail.shift();
+
+  if (gmap) {
+    updateCameraOnMap();
+    updateTrail();
+  }
+  setStatus('live', 'Live');
+}
+
+function vFromTo(a, b) {
+  if (!a || !b) return null;
+  return { x: (b.x??0)-(a.x??0), y: (b.y??0)-(a.y??0), z: (b.z??0)-(a.z??0) };
+}
+
+// ════════════════════════════════════════════════════════════
+//  MODEL LOADING
+// ════════════════════════════════════════════════════════════
+function normBox(b) {
+  if (!b) return null;
+  const min = b.min||b.minimum||b.minPoint||b.Min||b.boxMin;
+  const max = b.max||b.maximum||b.maxPoint||b.Max||b.boxMax;
+  if (!min&&Array.isArray(b)&&b.length>=2){const[a,c]=b;return normBox({min:a,max:c})}
+  if (!min||!max) return null;
+  const o = {
+    minX:+(min.x??min.X),minY:+(min.y??min.Y),minZ:+(min.z??min.Z??0),
+    maxX:+(max.x??max.X),maxY:+(max.y??max.Y),maxZ:+(max.z??max.Z??0)
+  };
+  if ([o.minX,o.minY,o.maxX,o.maxY].every(Number.isFinite)&&o.maxX!==o.minX&&o.maxY!==o.minY) return o;
+  return null;
+}
+
+async function tryBox(id) {
+  const fns = [
+    ()=>API?.viewer?.getObjectBoundingBox?.(id),
+    ()=>API?.viewer?.getModelBoundingBox?.(id),
+    ()=>API?.viewer?.getBoundingBox?.(id),
+    ()=>API?.viewer?.models?.getBoundingBox?.(id),
+    ()=>API?.models?.getBoundingBox?.(id)
+  ];
+  for (const fn of fns) { try { const b=normBox(await fn()); if(b) return b; } catch(e){} }
+  return null;
+}
+
+async function loadModels() {
+  if (!API) return;
+  const sel = document.getElementById('modelSelector');
+  sel.innerHTML = '<option value="__all__">Alle modeller</option>';
+  models = [];
+  let raw = [];
+  const fns = [
+    ()=>API.viewer?.getModels?.(),
+    ()=>API.viewer?.models?.getModels?.(),
+    ()=>API.models?.getModels?.(),
+    ()=>API.project?.getModels?.()
+  ];
+  for (const fn of fns) {
+    try {
+      const r = await fn();
+      if (Array.isArray(r)) { raw=r; break; }
+      if (Array.isArray(r?.models)) { raw=r.models; break; }
+      if (Array.isArray(r?.data))   { raw=r.data;   break; }
+    } catch(e) {}
+  }
+  for (const item of raw) {
+    const id   = item.id??item.modelId??item.guid??item.identifier;
+    const name = item.name??item.fileName??item.title??String(id);
+    if (id==null) continue;
+    const bbox = normBox(item.boundingBox||item.bbox||item.bounds) || await tryBox(id);
+    models.push({ id, name, bbox });
+    const opt = document.createElement('option');
+    opt.value = String(id);
+    opt.textContent = bbox ? name : `${name} (mangler 2D)`;
+    sel.appendChild(opt);
+  }
+  document.getElementById('modelCount').textContent = `${models.length} filer`;
+  drawModelBoxes();
+  if (models.some(m=>m.bbox)) {
+    fitAllModels();
+    setStatus('live','Tilkoblet');
+  }
+}
+
+function fitAllModels() {
+  if (!gmap) return;
+  const arr = models.filter(m => m.bbox);
+  if (!arr.length && hasCamera) {
+    const ll = modelToLatLng(camPos.x, camPos.y);
+    gmap.setCenter({ lat: ll.lat, lng: ll.lng });
+    gmap.setZoom(19);
+    return;
+  }
+  if (!arr.length) return;
+  const bounds = new google.maps.LatLngBounds();
+  arr.forEach(m => {
+    const b = m.bbox;
+    [{ x:b.minX,y:b.minY },{ x:b.maxX,y:b.minY },{ x:b.maxX,y:b.maxY },{ x:b.minX,y:b.maxY }]
+      .forEach(c => { const ll=modelToLatLng(c.x,c.y); bounds.extend({ lat:ll.lat, lng:ll.lng }); });
+  });
+  gmap.fitBounds(bounds, 30);
+}
+
+// ════════════════════════════════════════════════════════════
+//  CONFIG / SETUP
+// ════════════════════════════════════════════════════════════
+function loadDemo() {
+  document.getElementById('cfgLat').value     = '59.9109';
+  document.getElementById('cfgLng').value     = '10.7608';
+  document.getElementById('cfgMX').value      = '0';
+  document.getElementById('cfgMY').value      = '0';
+  document.getElementById('cfgScaleX').value  = '1';
+  document.getElementById('cfgScaleY').value  = '1';
+  document.getElementById('cfgRotation').value= '0';
+  applyConfig(true);
+}
+
+async function applyConfig(demo) {
+  cfg.anchorLat    = parseFloat(document.getElementById('cfgLat').value)      || 59.9139;
+  cfg.anchorLng    = parseFloat(document.getElementById('cfgLng').value)      || 10.7522;
+  cfg.anchorModelX = parseFloat(document.getElementById('cfgMX').value)       || 0;
+  cfg.anchorModelY = parseFloat(document.getElementById('cfgMY').value)       || 0;
+  cfg.scaleX       = parseFloat(document.getElementById('cfgScaleX').value)   || 1;
+  cfg.scaleY       = parseFloat(document.getElementById('cfgScaleY').value)   || 1;
+  cfg.rotation     = parseFloat(document.getElementById('cfgRotation').value) || 0;
+  const apiKey     = document.getElementById('cfgApiKey').value.trim();
+
+  // Save to localStorage for convenience
+  try { localStorage.setItem('minimap_cfg', JSON.stringify({...cfg, apiKey})); } catch(e){}
+
+  document.getElementById('setupPanel').classList.add('hidden');
+  document.getElementById('mainToolbar').style.display = '';
+  document.getElementById('mainControls').style.display = '';
+
+  setStatus('','Laster Google Maps…');
+  await loadGoogleMaps(apiKey);
+  initMap();
+
+  // Start demo animation if no real API
+  if (demo) startDemo();
+}
+
+// ════════════════════════════════════════════════════════════
+//  TRIMBLE CONNECT INIT
+// ════════════════════════════════════════════════════════════
+async function init() {
+  // Restore saved config
+  try {
+    const saved = JSON.parse(localStorage.getItem('minimap_cfg') || '{}');
+    if (saved.anchorLat) {
+      Object.assign(cfg, saved);
+      document.getElementById('cfgLat').value      = cfg.anchorLat;
+      document.getElementById('cfgLng').value      = cfg.anchorLng;
+      document.getElementById('cfgMX').value       = cfg.anchorModelX;
+      document.getElementById('cfgMY').value       = cfg.anchorModelY;
+      document.getElementById('cfgScaleX').value   = cfg.scaleX;
+      document.getElementById('cfgScaleY').value   = cfg.scaleY;
+      document.getElementById('cfgRotation').value = cfg.rotation;
+      if (saved.apiKey) document.getElementById('cfgApiKey').value = saved.apiKey;
+    }
+  } catch(e) {}
+
+  try {
+    API = await TrimbleConnectWorkspace.connect(window.parent, async (event, args) => {
+      if (['viewer.camera','viewer.cameraChanged','camera.changed','extension.camera'].includes(event)) {
+        const d   = args?.data ?? args;
+        const pos = d?.position ?? d?.eye ?? d?.cameraPosition;
+        const dir = d?.direction ?? (d?.target||d?.lookAt ? vFromTo(d.eye??d.position, d.target??d.lookAt) : null);
+        onCameraUpdate(pos, dir);
+      }
+    });
+
+    setStatus('', 'Tilkoblet – konfigurasjon…');
+    // Attempt immediate camera
+    try {
+      const cam = await API.viewer?.getCamera?.();
+      if (cam) onCameraUpdate(cam.position??cam.eye, cam.direction??(cam.target?vFromTo(cam.eye??cam.position,cam.target):null));
+    } catch(e) {}
+    try { await API.viewer?.subscribeToCamera?.(); } catch(e) {}
+    try { await API.viewer?.enableCameraEvents?.(); } catch(e) {}
+
+    // Auto-load models once map is ready (after applyConfig)
+    const waitForMap = setInterval(() => {
+      if (gmap) { clearInterval(waitForMap); loadModels(); }
+    }, 300);
+
+  } catch(e) {
+    console.error('TC API feil:', e);
+    setStatus('error', 'Frakoblet');
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+//  DEMO MODE
+// ════════════════════════════════════════════════════════════
+function startDemo() {
+  let t = 0;
+  // Fake a simple rectangular building bounding box
+  models = [{
+    id: 'demo-bygg',
+    name: 'Demo-bygg',
+    bbox: { minX: -20, minY: -12, maxX: 20, maxY: 12, minZ: 0, maxZ: 10 }
+  }];
+  document.getElementById('modelSelector').innerHTML =
+    '<option value="__all__">Alle modeller</option><option value="demo-bygg">Demo-bygg</option>';
+  document.getElementById('modelCount').textContent = '1 fil';
+
+  const waitMap = setInterval(() => {
+    if (!gmap) return;
+    clearInterval(waitMap);
+    drawModelBoxes();
+    fitAllModels();
+
+    setInterval(() => {
+      t += 0.025;
+      const R = 15;
+      const x = R * Math.sin(t);
+      const y = R * Math.sin(t * 2) / 2;
+      const z = 3;
+      const dx = Math.cos(t), dy = Math.cos(t * 2);
+      const len = Math.hypot(dx, dy) || 1;
+      onCameraUpdate({ x, y, z }, { x: dx/len, y: dy/len, z: 0 });
+    }, 100);
+  }, 200);
+}
+
+// ════════════════════════════════════════════════════════════
+//  UI WIRING
+// ════════════════════════════════════════════════════════════
+function setStatus(type, text) {
+  document.getElementById('statusDot').className = 'status-dot' + (type?' '+type:'');
+  document.getElementById('statusText').textContent = text;
+}
+
+function toast(msg, dur=2500) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), dur);
+}
+
+document.getElementById('centerCamera').onclick = () => {
+  if (!hasCamera || !gmap) return;
+  const ll = modelToLatLng(camPos.x, camPos.y);
+  gmap.panTo({ lat: ll.lat, lng: ll.lng });
+};
+document.getElementById('followBtn').onclick = e => {
+  followCamera = !followCamera;
+  e.currentTarget.classList.toggle('active', followCamera);
+  if (followCamera) document.getElementById('centerCamera').click();
+};
+document.getElementById('refreshModels').onclick = loadModels;
+document.getElementById('configBtn').onclick = () => {
+  document.getElementById('setupPanel').classList.remove('hidden');
+};
+document.getElementById('modelSelector').onchange = e => {
+  selectedModelId = e.target.value;
+  drawModelBoxes();
+};
+document.getElementById('zoomModel').onclick = () => {
+  if (!gmap) return;
+  if (selectedModelId !== '__all__') {
+    const m = models.find(x => String(x.id) === String(selectedModelId));
+    if (m?.bbox) {
+      const b = m.bbox;
+      const bounds = new google.maps.LatLngBounds();
+      [{ x:b.minX,y:b.minY },{ x:b.maxX,y:b.minY },{ x:b.maxX,y:b.maxY },{ x:b.minX,y:b.maxY }]
+        .forEach(c => { const ll=modelToLatLng(c.x,c.y); bounds.extend({lat:ll.lat,lng:ll.lng}); });
+      gmap.fitBounds(bounds, 30);
+      return;
+    }
+  }
+  fitAllModels();
+};
+['showModels','showTrail','showFOV'].forEach(id => {
+  document.getElementById(id).addEventListener('change', () => {
+    drawModelBoxes();
+    updateTrail();
+    if (hasCamera && gmap) updateCameraOnMap();
+  });
+});
+
+// ════════════════════════════════════════════════════════════
+//  BOOT
+// ════════════════════════════════════════════════════════════
+init();
 </script>
 </body>
 </html>
